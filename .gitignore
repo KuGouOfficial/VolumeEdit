@@ -1,0 +1,16 @@
+/build/
+/out/
+/.packages/
+/legacy/
+/.publish/
+/.vs/
+/.vscode/
+**/state/
+CMakeUserPresets.json
+*.user
+*.pdb
+*.obj
+*.ilk
+*.log
+__pycache__/
+*.py[cod]
