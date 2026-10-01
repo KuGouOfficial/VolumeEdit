@@ -137,7 +137,7 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
             SendMessageW(h,WM_COMMAND,Zero,0);wchar_t value[32];GetWindowTextW(numeric,value,32);valid=valid&&SendMessageW(slider,TBM_GETPOS,0,0)==400&&wcscmp(value,L"0.0")==0;
             DestroyWindow(h);return valid?0:2;
         }
-        if(preview){SetWindowTextW(status_line,L"解压即用 · 当前为界面预览\n默认 0 dB，点击“音量复位”返回基准。");SetWindowTextW(summary,L"可访问会话：0    原音量记录：0");ShowWindow(h,SW_SHOW);UpdateWindow(h);snapshot(h,ve::executable_directory()/L"client-preview.png");DestroyWindow(h);return 0;}
+        if(preview){SetWindowTextW(status_line,L"解压即用 · 当前为界面预览\n默认 0 dB，点击“音量复位”返回基准。");SetWindowTextW(summary,L"可访问会话：0    原音量记录：0");ShowWindow(h,SW_SHOW);UpdateWindow(h);snapshot(h,ve::executable_directory()/L"reports"/L"client-preview.png");DestroyWindow(h);return 0;}
         engine=std::make_unique<ve::AudioEngine>();const auto settings=engine->settings();SendMessageW(slider,TBM_SETPOS,TRUE,settings.gain_db_x10+400);gain_label();refresh();
         SendMessageW(GetDlgItem(h,Startup),BM_SETCHECK,ve::startup_enabled()?BST_CHECKED:BST_UNCHECKED,0);engine->start();SetTimer(h,2,500,nullptr);SetTimer(h,3,3000,nullptr);
         if(wcscmp(args,L"--tray")!=0)ShowWindow(h,SW_SHOW);MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){if(!IsDialogMessageW(h,&msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}return 0;

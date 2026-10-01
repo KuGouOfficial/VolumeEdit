@@ -81,7 +81,7 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
         const auto dpi=GetDpiForSystem();auto h=CreateWindowExW(0,klass.lpszClassName,L"VolumeEdit 卸载",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU,CW_USEDEFAULT,CW_USEDEFAULT,MulDiv(580,dpi,96),MulDiv(405,dpi,96),nullptr,nullptr,instance,nullptr);if(!h)return 1;SetWindowTextW(h,(std::wstring(L"VolumeEdit ")+ve::DisplayVersion+L" 卸载").c_str());
         if(wcscmp(args,L"--smoke")==0){const bool valid=ve::product_icon(instance,96,true)!=nullptr&&ve::product_icon(instance,96,false)!=nullptr&&IsWindow(button)&&IsWindow(status_line);DestroyWindow(h);return valid?0:2;}
         if(!cleanup_smoke){ShowWindow(h,SW_SHOW);UpdateWindow(h);}else SendMessageW(h,WM_COMMAND,100,0);
-        if(preview){snapshot(h,root/L"uninstall-preview.png");DestroyWindow(h);return 0;}
+        if(preview){snapshot(h,root/L"reports"/L"uninstall-preview.png");DestroyWindow(h);return 0;}
         MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){if(!IsDialogMessageW(h,&msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}return 0;
     }catch(const std::exception& e){if(wcscmp(args,L"--self-delete-smoke")==0)return 14;MessageBoxW(nullptr,ve::wide(e.what()).c_str(),L"VolumeEdit 卸载未完成",MB_OK|MB_ICONERROR);return 1;}
 }

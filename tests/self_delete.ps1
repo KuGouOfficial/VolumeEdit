@@ -1,10 +1,11 @@
-param([Parameter(Mandatory=$true)][string]$BuildDir)
+param([Parameter(Mandatory=$true)][string]$BuildDir, [Parameter(Mandatory=$true)][string]$ProgramDir)
 $ErrorActionPreference = 'Stop'
 $taskBuildRoot = (Resolve-Path -LiteralPath $BuildDir).Path
+$taskProgramRoot = (Resolve-Path -LiteralPath $ProgramDir).Path
 $taskFixture = [IO.Path]::GetFullPath((Join-Path $taskBuildRoot ('self-delete-' + [guid]::NewGuid().ToString('N'))))
 if (-not $taskFixture.StartsWith($taskBuildRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe fixture path' }
 New-Item -ItemType Directory -Path $taskFixture | Out-Null
-Copy-Item -LiteralPath (Join-Path $taskBuildRoot 'uninstall.exe') -Destination (Join-Path $taskFixture 'uninstall.exe')
+Copy-Item -LiteralPath (Join-Path $taskProgramRoot 'uninstall.exe') -Destination (Join-Path $taskFixture 'uninstall.exe')
 [IO.File]::WriteAllText((Join-Path $taskFixture 'product.id'), "VolumeEdit.Portable.8A7C7476-55F3-4525-82E7-33B2FB781132")
 $taskProcess = Start-Process -FilePath (Join-Path $taskFixture 'uninstall.exe') -ArgumentList '--self-delete-smoke' -PassThru -WindowStyle Hidden
 if (-not $taskProcess.WaitForExit(20000)) { throw 'Self-delete test timed out' }

@@ -45,4 +45,20 @@
 
 
 
-打包使用独立版本目录，不覆盖已有运行目录及用户状态。两个 EXE 的图标资源分别核对 9 种尺寸与原始 ICO 一致。
+两个 EXE 的图标资源分别核对 9 种尺寸与原始 ICO 一致。
+
+## 构建产物分类
+
+Makefile 固定产品版本 `VERSION = 0.1`，正式 EXE 直接输出到 out/；该目录配有 product.id 和产品文档，可以直接运行。打包使用明确文件清单，保留 out/ 中已有的运行状态、历史目录和用户文件。
+
+| 类别 | 位置 | 说明 |
+| --- | --- | --- |
+| 最终程序 | out/VolumeEdit.exe、out/uninstall.exe | 客户端和卸载界面 |
+| 最终发布包 | out/VolumeEdit-portable-v0.1-x64.zip | 8 个产品文件，不含测试程序及报告 |
+| 文件校验 | out/SHA256SUMS.txt、out/*.zip.sha256 | 分别校验 ZIP 内文件和 ZIP 本身 |
+| 自动测试报告 | out/reports/test-results.xml、test-results.log | 每次 test/package 更新，build 跳过测试时不更新 |
+| 界面预览 | out/reports/*-preview.png | 自身窗口绘制的开发检查图片 |
+| 编译及测试中间文件 | build/ | 测试 EXE、库、对象文件、生成资源、CTest 内部缓存 |
+| 人工验证记录 | 本文件 BUILD_STATUS.md | 描述检查范围和待实机验收项，不是程序，也不是自动生成的最新测试结果 |
+
+本次已实测 MSVC NMake 的 build 和 package 目标：EXE 直接链接到 out/，8/8 检查通过，JUnit 和运行日志生成到 out/reports/。ZIP 根目录恰好包含 8 个预期产品文件；逐项比对当前输出文件、文件清单 SHA-256 及 ZIP 校验值均通过。两个 EXE 的文件版本为 0.1.0.0、产品版本为 v0.1，生成的 manifest 数字版本为 0.1.0.0。打包使用系统 .NET 哈希和 ZIP API，兼容 Windows PowerShell 5.1 与 PowerShell 7。

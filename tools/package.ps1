@@ -1,35 +1,31 @@
-﻿param([ValidatePattern('^VolumeEdit-portable(?:-v?[0-9]+\.[0-9]+(?:\.[0-9]+)?)?$')][string]$OutputName)
 $ErrorActionPreference = 'Stop'
-$taskRoot = Split-Path -Parent $PSScriptRoot
-if(-not $OutputName){
-    $taskVersion=[regex]::Match((Get-Content -LiteralPath (Join-Path $taskRoot 'CMakeLists.txt') -Raw),'project\(VolumeEdit VERSION ([0-9]+)\.([0-9]+)\.([0-9]+)')
-    if(-not $taskVersion.Success){throw 'Cannot determine the project version'}
-    $taskDisplayVersion='v{0}.{1}' -f $taskVersion.Groups[1].Value,$taskVersion.Groups[2].Value
-    if([int]$taskVersion.Groups[3].Value -gt 0){$taskDisplayVersion+='.'+$taskVersion.Groups[3].Value}
-    $OutputName='VolumeEdit-portable-'+$taskDisplayVersion
-}
-$taskOut = [IO.Path]::GetFullPath((Join-Path $taskRoot ('out\'+$OutputName)))
-$taskBuild = Join-Path $taskRoot 'build'
-$taskFiles = @('VolumeEdit.exe','uninstall.exe','product.id','README.md','DESIGN.md','BUILD_STATUS.md','LICENSE')
-if(-not $taskOut.StartsWith($taskRoot + '\',[StringComparison]::OrdinalIgnoreCase)){throw 'Output escaped workspace'}
-if(Test-Path -LiteralPath $taskOut){
-    foreach($taskItem in Get-ChildItem -LiteralPath $taskOut -Force){
-        if($taskItem.PSIsContainer -or ($taskItem.Name -notin ($taskFiles + 'SHA256SUMS.txt'))){throw 'Release folder contains runtime state or unknown files; packaging stopped.'}
-    }
-}
+. (Join-Path $PSScriptRoot 'project.ps1')
+$taskVersion = Get-ProjectVersion
+$taskZip = Join-Path $taskOut ("VolumeEdit-portable-v$taskVersion-x64.zip")
+$taskZipHash = $taskZip + '.sha256'
+$taskChecksums = Join-Path $taskOut 'SHA256SUMS.txt'
+Initialize-Output
+foreach ($taskPath in @($taskZip, $taskZipHash, $taskChecksums)) { Assert-OutputPath $taskPath }
+
 & (Join-Path $PSScriptRoot 'build.ps1')
-New-Item -ItemType Directory -Force -Path $taskOut | Out-Null
-foreach($taskName in $taskFiles){
-    $taskSource=if($taskName.EndsWith('.exe')){Join-Path $taskBuild $taskName}else{Join-Path $taskRoot $taskName}
-    Copy-Item -LiteralPath $taskSource -Destination (Join-Path $taskOut $taskName) -Force
-}
-$taskFiles | ForEach-Object {
-    $taskHash=Get-FileHash -LiteralPath (Join-Path $taskOut $_) -Algorithm SHA256
-    '{0}  {1}' -f $taskHash.Hash,$_
-} | Set-Content -LiteralPath (Join-Path $taskOut 'SHA256SUMS.txt') -Encoding UTF8
-$taskZip=Join-Path $taskRoot ('out\'+$OutputName+'-x64.zip')
-Compress-Archive -LiteralPath $taskOut -DestinationPath $taskZip -Force
-Get-FileHash -LiteralPath $taskZip -Algorithm SHA256 | ForEach-Object { '{0}  {1}' -f $_.Hash,(Split-Path -Leaf $_.Path) } |
-    Set-Content -LiteralPath (Join-Path $taskRoot 'out\SHA256SUMS.txt') -Encoding UTF8
-Copy-Item -LiteralPath (Join-Path $taskRoot 'README.md') -Destination (Join-Path $taskRoot 'out\README.md') -Force
+# Package only the explicit product allowlist. Never include reports, state,
+# old ZIPs or user files, and never delete those files from out.
+$taskDeployFiles | ForEach-Object {
+    '{0}  {1}' -f (Get-ProductSha256 (Join-Path $taskOut $_)), $_
+} | Set-Content -LiteralPath $taskChecksums -Encoding UTF8
+$taskPayload = @($taskDeployFiles | ForEach-Object { Join-Path $taskOut $_ }) + $taskChecksums
+# Use the built-in .NET APIs in Windows PowerShell 5.1 and PowerShell 7 alike.
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$taskZipStream = [IO.File]::Open($taskZip, [IO.FileMode]::Create)
+try {
+    $taskArchive = [IO.Compression.ZipArchive]::new($taskZipStream, [IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($taskPath in $taskPayload) {
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive, $taskPath, [IO.Path]::GetFileName($taskPath), [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        }
+    } finally { $taskArchive.Dispose() }
+} finally { $taskZipStream.Dispose() }
+'{0}  {1}' -f (Get-ProductSha256 $taskZip), (Split-Path -Leaf $taskZip) |
+    Set-Content -LiteralPath $taskZipHash -Encoding UTF8
 Write-Host "Portable release: $taskZip"
+Write-Host "Archive checksum: $taskZipHash"
