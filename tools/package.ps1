@@ -1,5 +1,11 @@
+param([string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'project.ps1')
+if ($OutputDirectory) {
+    $taskCandidate = [IO.Path]::GetFullPath((Join-Path $taskRoot $OutputDirectory))
+    if ($taskCandidate -ne $taskOut -and -not $taskCandidate.StartsWith($taskOut+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Alternate output must stay under out.' }
+    $taskOut = $taskCandidate
+}
 $taskVersion = Get-ProjectVersion
 $taskZip = Join-Path $taskOut ("VolumeEdit-portable-v$taskVersion-x64.zip")
 $taskZipHash = $taskZip + '.sha256'
@@ -7,7 +13,7 @@ $taskChecksums = Join-Path $taskOut 'SHA256SUMS.txt'
 Initialize-Output
 foreach ($taskPath in @($taskZip, $taskZipHash, $taskChecksums)) { Assert-OutputPath $taskPath }
 
-& (Join-Path $PSScriptRoot 'build.ps1')
+& (Join-Path $PSScriptRoot 'build.ps1') -OutputDirectory $OutputDirectory
 # Package only the explicit product allowlist. Never include reports, state,
 # old ZIPs or user files, and never delete those files from out.
 $taskDeployFiles | ForEach-Object {

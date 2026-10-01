@@ -5,7 +5,7 @@ $taskProgramRoot=(Resolve-Path -LiteralPath $ProgramDir).Path
 $taskFixture=[IO.Path]::GetFullPath((Join-Path $taskBuildRoot ('uninstall-test-'+[guid]::NewGuid().ToString('N'))))
 if(-not $taskFixture.StartsWith($taskBuildRoot+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe fixture path'}
 New-Item -ItemType Directory -Path $taskFixture | Out-Null
-foreach($taskName in @('VolumeEdit.exe','uninstall.exe')){Copy-Item -LiteralPath (Join-Path $taskProgramRoot $taskName) -Destination (Join-Path $taskFixture $taskName)}
+foreach($taskName in @('VolumeEdit.exe','uninstall.exe','VolumeEditBroker.exe')){Copy-Item -LiteralPath (Join-Path $taskProgramRoot $taskName) -Destination (Join-Path $taskFixture $taskName)}
 [IO.File]::WriteAllText((Join-Path $taskFixture 'product.id'),'VolumeEdit.Portable.8A7C7476-55F3-4525-82E7-33B2FB781132')
 foreach($taskName in @('README.md','DESIGN.md','BUILD_STATUS.md','LICENSE','SHA256SUMS.txt','my-notes.txt')){[IO.File]::WriteAllText((Join-Path $taskFixture $taskName),'fixture')}
 $taskProcess=Start-Process -FilePath (Join-Path $taskFixture 'uninstall.exe') -ArgumentList '--uninstall-smoke' -PassThru -WindowStyle Hidden

@@ -1,4 +1,4 @@
-﻿# VolumeEdit v0.1 设计文档
+# VolumeEdit v0.1 权限辅助试验设计
 
 ## 目标与已接受的边界
 
@@ -6,7 +6,7 @@
 
 当前调节范围 −40.0～+40.0 dB，步进 0.1 dB；首次启动、默认配置与音量复位均为 0 dB。0 dB 通过蓝色数值、滑块中央标记、基准文字和复位按钮强调。输出默认跟随 Windows eRender/eConsole 默认端点，允许手动备用选择。
 
-客户端只提供输出设备、滑块与数值输入、音量复位、刷新设备和一个“开机启动”开关。删除静音、dB 预设、安装与维护、客户端内卸载等旧入口。卸载使用发布目录内独立 uninstall.exe。用户不需要命令行、管理员权限或证书。
+客户端提供输出设备、滑块与数值输入、音量复位、刷新设备、一个“开机启动”开关，以及可选的“启用/更新权限辅助”入口。删除静音、dB 预设、安装与维护、客户端内卸载等旧入口。卸载使用发布目录内独立 uninstall.exe。用户不需要命令行或证书。默认模式不需要管理员权限；权限辅助的首次注册、更新和移除需要一次 UAC 确认。
 
 会话控制不等价于混音后的 DSP。正 dB 按原会话标量相对提高，结果最高为 1.0；无法放大已经达到会话上限的音频。状态发布达到上限的会话数，界面提示饱和。不处理 ASIO、独占流及无法访问的会话。约 50 ms 轮询只是控制刷新间隔，不是严格的生效延迟上限，也不能防止新会话第一段声音以原音量播放。
 
@@ -16,26 +16,27 @@
 
 - VolumeEdit.exe：GUI、托盘和音量控制线程。
 - uninstall.exe：独立原生卸载界面。
+- VolumeEditBroker.exe：权限辅助服务及经 UAC 提权的注册、移除入口。
 - product.id：固定产品标识，部署目录清理的必要校验。
 - README.md、DESIGN.md、BUILD_STATUS.md、LICENSE、SHA256SUMS.txt。
 
 首次运行在 EXE 同目录创建 state。settings.json 保存用户设置；volumes.txt 保存会话恢复记录；instance.id 是本次部署的 GUID；startup.txt 保存当前及上一次属于本部署的启动命令。各文件原子更新可能产生同名 .tmp。其他目录、AppData、ProgramData 均不用于本产品的持久化数据。
 
-静态链接 MSVC CRT，asInvoker 权限，PerMonitorV2 DPI。没有驱动、服务、虚拟端点、计划任务、HKLM 修改、卸载注册表项或全局 PATH 修改。已启用 DEP、ASLR、CFG。版本未签名；普通桌面 EXE 不依赖内核驱动签名链。
+静态链接 MSVC CRT，asInvoker 权限，PerMonitorV2 DPI。默认模式没有驱动、服务、虚拟端点、计划任务、HKLM 修改、卸载注册表项或全局 PATH 修改。权限辅助模式会创建按部署 GUID 命名的 Win32 服务和 Program Files 受保护部署。已启用 DEP、ASLR、CFG。版本未签名；普通桌面 EXE 不依赖内核驱动签名链。
 
 ### 构建与版本归属
 
 根目录 Makefile 固定 `VERSION = 0.1`，是产品版本的唯一构建来源。Makefile 兼容 MSVC NMake 和 GNU Make，以 PowerShell 脚本初始化 MSVC，再调用 CMake/Ninja。CMake 直接读取 Makefile，生成 GUI 显示版本、PE 版本资源及程序集 manifest；修改 Makefile 会触发重新配置。打包脚本从同一文件读取版本生成 ZIP 名称，不另存产品版本。0.1 对外显示 v0.1，Windows 数字版本使用 0.1.0.0；配置 schema 版本独立维护。
 
-两个最终 EXE 链接到 out/ 根目录，并配套 product.id 和文档，使该目录可以直接运行。测试 EXE、静态库、对象文件、生成头文件和 manifest 放在 build/。自动测试报告、日志和 GUI 预览放在 out/reports/；这些属于开发验证产物，不能作为用户程序发布。README.md 提供逐项文件分类。
+三个最终 EXE 链接到 out/ 根目录，并配套 product.id 和文档，使该目录可以直接运行。测试 EXE、静态库、对象文件、生成头文件和 manifest 放在 build/。自动测试报告、日志和 GUI 预览放在 out/reports/；这些属于开发验证产物，不能作为用户程序发布。README.md 提供逐项文件分类。
 
-打包只收集两个 EXE、product.id、三份产品 Markdown、LICENSE 和生成的 SHA256SUMS.txt，共 8 个文件；ZIP 文件根目录直接包含它们。out/reports/、state、其他 ZIP 和用户文件均不进入发布包，也不会因打包被删除。ZIP 的校验值单独写入同名 .zip.sha256。GitHub Actions 分别上传发布包和测试报告。BUILD_STATUS.md 是人工维护的验证记录，最近一次 CTest 结果以 out/reports/ 中带时间信息的自动报告为准。
+打包只收集三个 EXE、product.id、三份产品 Markdown、LICENSE 和生成的 SHA256SUMS.txt，共 9 个文件；ZIP 文件根目录直接包含它们。out/reports/、state、其他 ZIP 和用户文件均不进入发布包，也不会因打包被删除。ZIP 的校验值单独写入同名 .zip.sha256。GitHub Actions 分别上传发布包和测试报告。BUILD_STATUS.md 是人工维护的验证记录，最近一次 CTest 结果以 out/reports/ 中带时间信息的自动报告为准。
 
 ## 音量控制
 
 主线程负责 Windows 消息、界面、托盘、设置提交；一个 MTA COM 工作线程每约 50 ms 检查端点和会话。AudioEngine 内部用互斥锁复制设置，用原子变量发布状态和会话数量。设备断开进入等待状态；错误显示失败；配置损坏时不使用猜测出的设置执行衰减，用户明确复位后可恢复工作。
 
-通过 IMMDeviceEnumerator 枚举活动输出，使用 IAudioSessionManager2 获取会话。过滤到当前用户 SID 的进程；允许 Windows 系统声音会话；无法查询所属进程的会话跳过。使用 ISimpleAudioVolume::GetMasterVolume/SetMasterVolume，仅修改会话标量，不修改主音量和静音标志。专用事件 GUID 标记本工具写入。
+通过 IMMDeviceEnumerator 枚举活动输出，使用 IAudioSessionManager2 获取会话。过滤到当前用户 SID 的进程；允许 Windows 系统声音会话。普通令牌查询失败时，尝试通过已安装的权限辅助服务确认身份；服务不可用、查询失败、不同用户或不同登录会话时继续跳过，并显示未确认会话数。使用 ISimpleAudioVolume::GetMasterVolume/SetMasterVolume，仅修改会话标量，不修改主音量和静音标志。专用事件 GUID 标记本工具写入。
 
 每个会话的目标标量：
 
@@ -79,21 +80,37 @@ uninstall.exe 校验部署目录标记，用户点击卸载后在后台线程：
 
 1. 根据窗口类和进程完整 EXE 路径，只请求本目录客户端退出；等待最多 15 秒。
 2. 恢复记录中的会话原音量。仍有未恢复记录则停止，保留程序、记录和启动项，不报告成功。
-3. 清除本部署的当前用户 Run 值。
+3. 已启用权限辅助时，先经 UAC 停止并删除本部署的服务和受保护文件；失败保留产品与状态。随后清除本部署的当前用户 Run 值。
 4. 按固定清单删除产品数据和文件，保留未知文件、源代码及用户自建内容。state 和根目录只在为空时删除。拒绝通过目录联接/符号链接清理。
 5. 保留 uninstall.exe 和 product.id，启动系统自带 PowerShell 的隐藏进程；脚本通过 UTF-16 Base64 命令传递，绝对目录和父 PID 通过子进程环境传递，不将目录插入脚本文本。
 6. 原生窗口退出；清理进程等待原进程结束，再校验路径与标记，用 Remove-Item -LiteralPath 删除两个已知文件，删除空根目录，显示最终结果。
 
-Windows 在当前机器拒绝删除仍映射的运行 EXE，因此使用上述等待退出方案。没有临时脚本、临时 EXE、服务、注册表延迟删除项或计划任务。内置清理进程完成后自行退出。PowerShell 被系统策略禁止、文件被其他进程占用或磁盘权限异常时不能承诺清理完成；标记在最后删除以便重试。如果最后一步只剩标记，重新解压 uninstall.exe 到原目录后重试。
+Windows 在当前机器拒绝删除仍映射的运行 EXE，因此使用上述等待退出方案。最后文件清理不创建临时脚本、临时 EXE、额外服务、注册表延迟删除项或计划任务。内置清理进程完成后自行退出。PowerShell 被系统策略禁止、文件被其他进程占用或磁盘权限异常时不能承诺清理完成；标记在最后删除以便重试。如果最后一步只剩标记，重新解压 uninstall.exe 到原目录后重试。
 
 “无残留”限定为本工具创建且有所有权证明的配置和文件。保留用户添加的文件；不删除 Windows/杀毒软件自行产生的系统日志、Prefetch 或系统缓存。也不处理历史驱动部署或其他用户的配置。
 
+## 权限辅助服务
+
+服务名为 VolumeEdit.Permission.{部署 GUID}，是普通用户态 Win32 服务，以 LocalSystem 运行。服务只提供两类有界请求：查询进程是否属于授权用户，以及切换自身的自动/手动启动类型。没有音频采样、界面、任意命令、任意文件路径或任意服务配置接口。音量控制、配置和恢复记录继续由登录会话中的普通权限客户端维护。
+
+客户端确认 UAC 后，VolumeEditBroker.exe 校验发起进程的真实 EXE 路径、用户 SID、部署标记和 GUID。服务文件部署到 Program Files/VolumeEditPermission-{GUID}/，只包含 VolumeEditBroker.exe、owner.txt 和 product.id。文件从创建开始即使用 Administrators 所有者、SYSTEM/Administrators 完全控制、Users 只读执行的显式 ACL；普通用户无法更改 SYSTEM 将执行的文件。服务加载和客户端连接都验证目录、文件权限、服务类型、LocalSystem 账户及精确二进制路径，拒绝联接和符号链接。
+
+管道名按 GUID 隔离，拒绝远程客户端；授权用户获得必要的读写权限，不获得创建管道实例的权限。服务通过管道模拟读取调用者 SID、真实进程 ID 和登录会话，随后恢复 SYSTEM 身份。进程查询必须属于相同的非零登录会话，且 PID 对应的创建时间与请求一致；结果只返回 Own/Other/Unknown 和错误码。SID 不符、PID 重用、未知协议、畸形参数或超时一律拒绝。客户端还核对管道服务器 PID 与 SCM 报告的受保护服务进程 PID，防止连接冒充者。
+
+普通查询成功时不访问服务；失败结果及辅助查询按 PID/创建时间缓存约 1 秒。服务查询失败不会放宽所有权策略，未确认会话继续不修改。SYSTEM 权限不意味着所有应用都可控制；该试验仅针对身份查询权限问题。
+
+开机启动勾选时保留原有 HKCU Run 登录启动，并通过已认证管道将本服务设为 Automatic；取消时删除自己的 Run 值并改为 Demand。服务权限仅允许部署用户查询和启动，不授予修改服务二进制、删除服务或任意配置的权限。自动启动由 SCM 完成，不在每次开机弹 UAC。服务不负责用户登录前的音频控制。
+
+首次尝试前在 state/helper.txt 写入追踪标记，使中途中断的部署仍能由卸载器追踪；取消 UAC 且没有系统资源时可直接清理标记。卸载先确保辅助可用并恢复音量，再请求 UAC，校验受保护元数据，停止服务、等待服务进程退出、删除 SCM 对象并确认已移除，最后按固定清单删除服务文件和空目录。恢复、权限确认、服务删除或文件清理失败均保留产品与状态以便重试。已启用服务时移动目录，需要先更新辅助服务的部署元数据，再更新登录启动路径。
+
+新增 helper 测试覆盖用户、登录会话、PID 创建时间策略及普通进程身份查询；helper_pipe 使用真实临时管道验证身份认证、正常请求、错误协议、过期 PID 创建时间和无效启动参数，完全不注册服务或修改启动设置。LocalSystem 实机行为和完整服务卸载需单独验收。
+
 ## 品牌图标
 
-assets/volumeedit.svg 提供代码原生的矢量源，图形为深蓝圆角底、青色耳机、白色头梁与橙色调节钮。ICO 含 16、20、24、32、40、48、64、128、256 像素九个尺寸，编译到客户端和卸载程序的 PE 图标资源。窗口及托盘按 DPI 加载对应尺寸，资源由系统共享，不生成外部图标文件或新增卸载条目。assets/generate_icons.py 是可选的开发生成器，需要 Pillow；正常构建直接使用已保存的 ICO，无需 Python。
+assets/volumeedit.svg 提供代码原生的矢量源，图形为深蓝圆角底、青色耳机、白色头梁与橙色调节钮。ICO 含 16、20、24、32、40、48、64、128、256 像素九个尺寸，编译到客户端、卸载程序和辅助程序的 PE 图标资源。窗口及托盘按 DPI 加载对应尺寸，资源由系统共享，不生成外部图标文件或新增卸载条目。assets/generate_icons.py 是可选的开发生成器，需要 Pillow；正常构建直接使用已保存的 ICO，无需 Python。
 
 ## 实现与验证
 
-src/app.cpp：原生 UI 和托盘。src/audio.cpp：会话枚举、当前用户过滤、控制及恢复。src/backup.cpp：音量策略、恢复键迁移、严格备份及原子写入。src/portable.cpp：部署所有权、Run 项、清理和最后退出清理。src/config.cpp：设置解析。src/uninstall.cpp：卸载 UI。
+src/app.cpp：原生 UI 和托盘。src/audio.cpp：会话枚举、当前用户过滤、控制及恢复。src/backup.cpp：音量策略、恢复键迁移、严格备份及原子写入。src/portable.cpp：部署所有权、Run 项、清理和最后退出清理。src/config.cpp：设置解析。src/uninstall.cpp：卸载 UI。src/permission_helper.cpp：普通权限查询与服务客户端。src/helper_service.cpp：受限服务、管理员注册与移除。
 
 自动检查覆盖严格配置、默认路由、衰减/提高不累积及正值饱和恢复、复位、外部音量更改、事务中断恢复、实例迁移歧义、固定清单及自建文件保留、GUI 复位和卸载窗口、自身 EXE 与空目录最终清理。音量算法测试只用模拟标量，不修改用户的真实会话。真实设备、重启、应用混音器交互和听感验收单独列于 BUILD_STATUS.md。

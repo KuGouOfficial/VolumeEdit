@@ -1,7 +1,12 @@
-﻿param([switch]$SkipTests, [switch]$Clean)
+﻿param([switch]$SkipTests, [switch]$Clean, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 $env:VSLANG = '1033'
 . (Join-Path $PSScriptRoot 'project.ps1')
+if ($OutputDirectory) {
+    $taskCandidate = [IO.Path]::GetFullPath((Join-Path $taskRoot $OutputDirectory))
+    if ($taskCandidate -ne $taskOut -and -not $taskCandidate.StartsWith($taskOut+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Alternate output must stay under out.' }
+    $taskOut = $taskCandidate
+}
 Initialize-Output
 $taskReports = Join-Path $taskOut 'reports'
 Assert-OutputPath $taskReports
@@ -24,7 +29,7 @@ $env:VSLANG = '1033'
 $taskCMake = Join-Path $taskVs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 Push-Location $taskRoot
 try {
-    & $taskCMake --preset release
+    & $taskCMake --preset release "-DVOLUMEEDIT_OUTPUT_DIR=$taskOut"
     if ($LASTEXITCODE) { throw 'CMake configure failed.' }
     if ($Clean) { & $taskCMake --build --preset release --clean-first }
     else { & $taskCMake --build --preset release }
@@ -38,5 +43,5 @@ try {
     } else {
         Write-Host 'Tests skipped. Existing out/reports files, if any, are from an earlier test run.'
     }
-    Write-Host "Programs: $taskOut\VolumeEdit.exe and $taskOut\uninstall.exe"
+    Write-Host "Programs: $taskOut\VolumeEdit.exe, $taskOut\uninstall.exe, $taskOut\VolumeEditBroker.exe"
 } finally { Pop-Location }

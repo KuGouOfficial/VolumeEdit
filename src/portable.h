@@ -3,6 +3,7 @@
 namespace ve {
 inline constexpr char ProductId[]="VolumeEdit.Portable.8A7C7476-55F3-4525-82E7-33B2FB781132";
 void ensure_state();
+std::wstring deployment_identity(bool create=false);
 bool startup_enabled();
 void set_startup(bool enabled);
 void clear_startup();

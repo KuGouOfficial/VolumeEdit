@@ -1,14 +1,16 @@
-﻿# 构建与验证记录
+# 构建与验证记录
 
-2026-10-01，当前版本：VolumeEdit v0.1 免驱动解压版，Windows x64 / MSVC 19.51 / Windows SDK 10.0.26100 / C++20。GUI EXE 静态链接运行库，未签名，无 WDK 或驱动安装要求。
+2026-10-01，当前版本：VolumeEdit v0.1 权限辅助试验版，Windows x64 / MSVC 19.51 / Windows SDK 10.0.26100 / C++20。GUI EXE 静态链接运行库，未签名，无 WDK 或驱动安装要求。
 
 ## 已完成
 
-当前构建成功，无编译警告；CTest **8/8 通过**：
+当前构建成功，无编译警告；CTest **10/10 通过**：
 
 | 检查 | 结果 |
 | --- | --- |
 | config | 默认 0 dB、正值保存/加载、旧 −80 dB 配置迁移、自动输出、严格 JSON、Unicode、范围和原子设置存储 |
+| helper | 当前用户身份读取、不同用户/会话拒绝、零会话拒绝、PID 创建时间匹配与无效进程拒绝 |
+| helper_pipe | 真实命名管道往返、调用者 SID 认证、坏协议/过期创建时间/无效启动参数拒绝；不注册服务 |
 | routing | 跟随当前默认输出、设备切换与断开、手动输出、−40～+40 dB 边界 |
 | backup | 严格备份、正负调节不累积、100% 上限及复位、外部更改、新旧实例迁移歧义、写入前后中断恢复 |
 | portable | 部署标记校验、固定清单删除、保留用户文件 |
@@ -17,15 +19,15 @@
 | self_delete | 一次性真实 EXE 副本退出后，EXE、标记及整个空目录消失 |
 | uninstall_cleanup | 真实卸载 GUI 流程清理整套产品文件及自身，保留用户文件，无真实音量或注册表修改 |
 
-图标提供 9 种尺寸；客户端、托盘和卸载程序共用深蓝/青色耳机与橙色调节钮设计。图标嵌入两个 EXE，不增加部署文件。正 dB 提高较低的会话标量；达到 100% 上限时保留原基准，复位和退出可恢复。
+图标提供 9 种尺寸；客户端、托盘和卸载程序共用深蓝/青色耳机与橙色调节钮设计。图标嵌入三个 EXE，不增加部署文件。正 dB 提高较低的会话标量；达到 100% 上限时保留原基准，复位和退出可恢复。
 
-自删除检查覆盖系统 PowerShell 隐藏清理进程。直接删除映射中的 EXE 在本机失败，产品使用等待原进程退出再删除的方案；无临时脚本文件或持久化清理任务。已修正 Windows PowerShell 传参可能包含引号的问题，两个 EXE 都使用 CommandLineToArgvW 解析参数。
+自删除检查覆盖系统 PowerShell 隐藏清理进程。直接删除映射中的 EXE 在本机失败，产品使用等待原进程退出再删除的方案；无临时脚本文件或持久化清理任务。已修正 Windows PowerShell 传参可能包含引号的问题，三个 EXE 都使用 CommandLineToArgvW 解析参数。
 
 已检查自身 GUI 的 PNG（新版布局）：0 dB 蓝色基准、中央标记、复位按钮、单一开机启动开关及独立卸载窗口。截图仅为自身窗口绘制，某些原生控件在 WM_PRINT 中的文本可能不显示；测试检查了默认设备行实际存在且非空。
 
 自动检查没有改动当前用户真实音量、Run 启动项、服务、驱动或系统音频设置。音量数学、恢复事务及冲突处理使用模拟标量；清理检查使用工作区专用测试目录。
 
-发布包 out/VolumeEdit-portable-v0.1-x64.zip 只包含当前两个 EXE、产品标记、文档、Apache-2.0 许可证及 SHA256SUMS，不包含旧驱动、安装器、证书、脚本、状态或调试文件。历史驱动产物不提交到公开仓库。
+发布包 out/VolumeEdit-portable-v0.1-x64.zip 只包含当前三个 EXE、产品标记、文档、Apache-2.0 许可证及 SHA256SUMS，不包含旧驱动、安装器、证书、脚本、状态或调试文件。历史驱动产物不提交到公开仓库。
 
 ## 待实际使用验收
 
@@ -41,7 +43,7 @@
 
 会话接口不提供采样级处理或混音后增益，轮询不能保证新声音的首包被衰减。卸载保留无法恢复的记录，不在恢复失败时声称完成。“无残留”指本产品有所有权的资源，不能覆盖 Windows 或安全软件独立产生的日志/缓存。
 
-发布 ZIP 已校验：8 个预期文件、产品标记、每项 SHA-256 和当前构建 EXE 完全匹配；PE 依赖仅 Windows 系统 DLL，无额外 VC 运行库要求。
+发布 ZIP 已校验：9 个预期文件、产品标记、每项 SHA-256 和当前构建 EXE 完全匹配；PE 依赖仅 Windows 系统 DLL，无额外 VC 运行库要求。
 
 
 
@@ -53,12 +55,28 @@ Makefile 固定产品版本 `VERSION = 0.1`，正式 EXE 直接输出到 out/；
 
 | 类别 | 位置 | 说明 |
 | --- | --- | --- |
-| 最终程序 | out/VolumeEdit.exe、out/uninstall.exe | 客户端和卸载界面 |
-| 最终发布包 | out/VolumeEdit-portable-v0.1-x64.zip | 8 个产品文件，不含测试程序及报告 |
+| 最终程序 | out/VolumeEdit.exe、out/uninstall.exe、out/VolumeEditBroker.exe | 客户端和卸载界面 |
+| 最终发布包 | out/VolumeEdit-portable-v0.1-x64.zip | 9 个产品文件，不含测试程序及报告 |
 | 文件校验 | out/SHA256SUMS.txt、out/*.zip.sha256 | 分别校验 ZIP 内文件和 ZIP 本身 |
 | 自动测试报告 | out/reports/test-results.xml、test-results.log | 每次 test/package 更新，build 跳过测试时不更新 |
 | 界面预览 | out/reports/*-preview.png | 自身窗口绘制的开发检查图片 |
 | 编译及测试中间文件 | build/ | 测试 EXE、库、对象文件、生成资源、CTest 内部缓存 |
 | 人工验证记录 | 本文件 BUILD_STATUS.md | 描述检查范围和待实机验收项，不是程序，也不是自动生成的最新测试结果 |
 
-本次已实测 MSVC NMake 的 build 和 package 目标：EXE 直接链接到 out/，8/8 检查通过，JUnit 和运行日志生成到 out/reports/。ZIP 根目录恰好包含 8 个预期产品文件；逐项比对当前输出文件、文件清单 SHA-256 及 ZIP 校验值均通过。两个 EXE 的文件版本为 0.1.0.0、产品版本为 v0.1，生成的 manifest 数字版本为 0.1.0.0。打包使用系统 .NET 哈希和 ZIP API，兼容 Windows PowerShell 5.1 与 PowerShell 7。
+历史普通版已实测 MSVC NMake 的 build 和 package 目标：两个 EXE 直接链接到 out/，8/8 检查通过，JUnit 和运行日志生成到 out/reports/，ZIP 根目录恰好包含 8 个预期产品文件。当前权限辅助试验版通过 PowerShell 构建及打包，10/10 检查通过，ZIP 有 9 个产品文件，逐项比对文件清单 SHA-256 及 ZIP 校验值均通过。当前三个 EXE 的文件版本为 0.1.0.0、产品版本为 v0.1，生成的 manifest 数字版本为 0.1.0.0。打包使用系统 .NET 哈希和 ZIP API，兼容 Windows PowerShell 5.1 与 PowerShell 7。
+
+## 权限辅助实机验收状态
+
+试验版位于 out/service-trial/，保留正在运行的旧版。已通过 10 项自动检查；权限辅助测试只用当前进程身份和临时命名管道，没有创建系统服务或改变真实会话音量。
+
+2026-10-01，经用户确认 UAC 后已在本机实测：
+
+- SCM 注册成功，服务以 LocalSystem 运行，当前为手动启动。
+- 服务 EXE、owner.txt 和 product.id 部署在 Program Files 的专用目录，目录所有者为 Administrators；SYSTEM/Administrators 完全控制，Users 只读和执行。
+- 普通权限验证客户端（TokenIsElevated=0）通过真实服务管道确认当前进程归属；错误协议及错误 PID 创建时间被拒绝。
+- 普通客户端通过已认证管道切换服务自动/手动启动，无新 UAC；验证后恢复原启动方式，未修改真实 Run 启动项。
+- 开发验证结果保存于 out/service-trial/reports/service-live-probe.txt，不随 ZIP 发布。
+
+英雄联盟客户端尚未重新打开，LocalSystem 查询该进程及实际调音、完整服务卸载和重启验收仍未通过，不能声明已解决英雄联盟声音问题。
+
+状态文案已改为“音量控制已启用”，并显示无法确认归属的会话数量。辅助不可用时维持严格拒绝策略，不将访问失败的会话当作当前用户会话。

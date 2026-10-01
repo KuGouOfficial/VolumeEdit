@@ -17,7 +17,7 @@ void verify_product(const fs::path& root){
     if(id!=ProductId)throw std::runtime_error("Cannot verify this portable deployment; cleanup stopped");
 }
 void ensure_state(){verify_product(deployment_root());refuse_reparse(state_directory());fs::create_directory(state_directory());}
-static std::wstring identity(bool create){
+std::wstring deployment_identity(bool create){
     const auto path=state_directory()/L"instance.id";refuse_reparse(path);
     if(!fs::exists(path)){
         if(!create)return {};
@@ -27,7 +27,7 @@ static std::wstring identity(bool create){
     if(text.size()!=38||FAILED(CLSIDFromString(text.c_str(),&guid)))throw std::runtime_error("Invalid portable deployment identity");return text;
 }
 struct Key{HKEY value{};~Key(){if(value)RegCloseKey(value);}};
-static std::wstring run_name(bool create){const auto id=identity(create);return id.empty()?L"":L"VolumeEdit.Portable."+id;}
+static std::wstring run_name(bool create){const auto id=deployment_identity(create);return id.empty()?L"":L"VolumeEdit.Portable."+id;}
 static std::wstring run_value(){return L"\""+(deployment_root()/L"VolumeEdit.exe").wstring()+L"\" --tray";}
 static std::wstring get_value(HKEY key,const std::wstring& name){
     DWORD type=0,size=0;auto code=RegQueryValueExW(key,name.c_str(),nullptr,&type,nullptr,&size);if(code==ERROR_FILE_NOT_FOUND)return {};
@@ -59,7 +59,7 @@ void set_startup(bool enabled){
     if(code!=ERROR_SUCCESS)throw Failure(HRESULT_FROM_WIN32(code));
     if(!enabled)fs::remove(state_directory()/L"startup.txt");
 }
-void clear_startup(){if(!identity(false).empty())set_startup(false);}
+void clear_startup(){if(!deployment_identity(false).empty())set_startup(false);}
 bool unlink_executable(const fs::path& path){
     Handle file(CreateFileW(path.c_str(),DELETE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr));if(!file)return GetLastError()==ERROR_FILE_NOT_FOUND;
     FILE_DISPOSITION_INFO_EX disposition{FILE_DISPOSITION_FLAG_DELETE|FILE_DISPOSITION_FLAG_POSIX_SEMANTICS|FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE};
@@ -68,11 +68,11 @@ bool unlink_executable(const fs::path& path){
 void remove_product_files(const fs::path& root,bool keep_uninstaller){
     verify_product(root);refuse_reparse(root/L"state");
     // Fixed allowlist: preserve source files and user-created files in the folder.
-    for(const auto* name:{L"settings.json",L"settings.json.tmp",L"volumes.txt",L"volumes.txt.tmp",L"instance.id",L"instance.id.tmp",L"startup.txt",L"startup.txt.tmp"}){
+    for(const auto* name:{L"settings.json",L"settings.json.tmp",L"volumes.txt",L"volumes.txt.tmp",L"instance.id",L"instance.id.tmp",L"startup.txt",L"startup.txt.tmp",L"helper.txt",L"helper.txt.tmp"}){
         const auto path=root/L"state"/name;refuse_reparse(path);fs::remove(path);
     }
     if(fs::exists(root/L"state")&&fs::is_empty(root/L"state"))fs::remove(root/L"state");
-    for(const auto* name:{L"VolumeEdit.exe",L"uninstall.exe",L"README.md",L"DESIGN.md",L"BUILD_STATUS.md",L"LICENSE",L"SHA256SUMS.txt",L"product.id"}){
+    for(const auto* name:{L"VolumeEdit.exe",L"uninstall.exe",L"VolumeEditBroker.exe",L"README.md",L"DESIGN.md",L"BUILD_STATUS.md",L"LICENSE",L"SHA256SUMS.txt",L"product.id"}){
         if(keep_uninstaller&&(std::wstring_view(name)==L"uninstall.exe"||std::wstring_view(name)==L"product.id"))continue;
         const auto path=root/name;refuse_reparse(path);if(!fs::exists(path))continue;
         if(path.extension()==L".exe"){if(!unlink_executable(path))throw Failure(HRESULT_FROM_WIN32(GetLastError()));}

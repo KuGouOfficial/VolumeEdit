@@ -1,7 +1,7 @@
 # Shared build helpers. The product version is read only from Makefile.
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskOut = Join-Path $taskRoot 'out'
-$taskDeployFiles = @('VolumeEdit.exe','uninstall.exe','product.id','README.md','DESIGN.md','BUILD_STATUS.md','LICENSE')
+$taskDeployFiles = @('VolumeEdit.exe','uninstall.exe','VolumeEditBroker.exe','product.id','README.md','DESIGN.md','BUILD_STATUS.md','LICENSE')
 
 function Get-ProjectVersion {
     $taskMatches = [regex]::Matches((Get-Content -LiteralPath (Join-Path $taskRoot 'Makefile') -Raw), '(?m)^VERSION[ \t]*=[ \t]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)[ \t]*\r?$')

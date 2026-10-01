@@ -45,6 +45,7 @@ CMake 和 PowerShell 打包脚本直接读取同一行。当前对外显示 v0.1
 out/
   VolumeEdit.exe                       最终客户端，双击运行
   uninstall.exe                        最终卸载工具，双击运行
+  VolumeEditBroker.exe                  权限辅助，由客户端部署为服务
   product.id                           必须保留的部署标识
   README.md / DESIGN.md / LICENSE      产品文档和许可证
   BUILD_STATUS.md                      人工维护的验证记录
@@ -63,9 +64,9 @@ build/
   CMakeFiles/ 等                        编译中间文件，不发布
 ```
 
-只有两个 EXE 是最终应用；运行时必须保留同目录 product.id。普通 build 不会刷新旧 ZIP、校验清单或测试报告，需要发布时执行 package，查看自动报告时核对时间。正常运行在 out/state 中保存设置与恢复记录；报告目录仅由开发检查生成。
+三个 EXE 是产品程序，客户端和卸载程序供用户双击，辅助程序由客户端部署；运行时必须保留同目录 product.id。普通 build 不会刷新旧 ZIP、校验清单或测试报告，需要发布时执行 package，查看自动报告时核对时间。正常运行在 out/state 中保存设置与恢复记录；报告目录仅由开发检查生成。
 
-ZIP 根目录包含两个 EXE、product.id、README.md、DESIGN.md、BUILD_STATUS.md、LICENSE 和 SHA256SUMS.txt，共 8 个文件。明确清单打包排除 state、reports、测试程序、调试符号和未知文件，不会将整个 out 目录递归打包或删除。卸载只清理产品文件与本部署状态，保留 ZIP、报告、源代码和用户自建内容。
+ZIP 根目录包含三个 EXE、product.id、README.md、DESIGN.md、BUILD_STATUS.md、LICENSE 和 SHA256SUMS.txt，共 9 个文件。明确清单打包排除 state、reports、测试程序、调试符号和未知文件，不会将整个 out 目录递归打包或删除。卸载只清理产品文件与本部署状态，保留 ZIP、报告、源代码和用户自建内容。
 
 ## 检查与预览
 
@@ -90,3 +91,20 @@ self_delete.ps1 和 uninstall_cleanup.ps1 从 out 复制已构建的正式 EXE�
 .github/workflows/build.yml 在 Windows runner 上调用同一 package.ps1。成功构建的 `VolumeEdit-portable-x64` 产物包含最终 ZIP 及 ZIP 校验值；`VolumeEdit-test-reports` 产物独立上传自动报告、日志和预览，测试失败时也尝试保留诊断文件。
 
 工作流只申请 contents: read，不自动发布 Release。无需 WDK、Python 或音频硬件；只有主动重新生成图标时需要 Pillow。
+
+## 权限辅助试验
+
+当前运行中的 EXE 会阻止原路径覆盖。为保留旧版，本地试验可使用：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1 -OutputDirectory out/service-trial
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1 -OutputDirectory out/service-trial
+```
+
+默认 Makefile 入口仍直接输出到 out/。备用输出仅允许位于 out/ 内，测试报告跟随输出目录。
+
+辅助服务代码是试验实现，默认不注册任何系统服务。用户通过 GUI“启用权限辅助”操作，UAC 后将固定三文件部署到 Program Files 下按 GUID 命名的受保护目录。helper 和 helper_pipe 自动检查无需管理员权限，不改音量、注册表或服务；真实注册和清理仍需实机验证。
+
+仅用于诊断的 --setup-helper-only 入口会请求 UAC 并启用辅助，但不启动音量线程或创建托盘。--ownership-probe PID 只读比较普通查询与辅助查询，输出 reports/ownership-probe.txt；0=Unknown、1=Own、2=Other，assisted 表示辅助请求是否完成。不要将诊断入口作为普通用户使用流程。
+
+服务是窄接口的 LocalSystem 权限代理。修改 IPC、受保护文件 ACL、所有权判断或卸载流程时必须运行权限门禁和真实管道回归检查，并单独验证 UAC、SCM 启动/移除与 Program Files 清理。原 releases/v0.1 分支及 v0.1 标签不因本地试验改写。

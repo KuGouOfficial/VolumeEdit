@@ -3,6 +3,7 @@
 #include "gui_snapshot.h"
 #include "icons.h"
 #include "product_version.h"
+#include "permission_helper.h"
 #include <commctrl.h>
 #include <shellapi.h>
 #include <thread>
@@ -33,8 +34,10 @@ void perform(){
         ve::Apartment apartment;ve::verify_product(root);
         // Holding the singleton prevents relaunch while product files are removed.
         ve::Handle singleton(CreateMutexW(nullptr,FALSE,L"Local\\VolumeEdit.Portable.v3"));if(!singleton)ve::win(FALSE);
+        if(!cleanup_smoke)ve::ensure_helper_running();
         close_client();
         if(ve::restore_saved_volumes()!=0)throw std::runtime_error("部分原音量尚未恢复。请连接原输出设备并重新打开相关应用，再点击卸载。恢复记录和程序文件已保留。");
+        if(!cleanup_smoke)ve::remove_helper(window);
         ve::clear_startup();
         wchar_t windows[32768];const auto n=GetWindowsDirectoryW(windows,32768);if(!n||n>=32768)ve::win(FALSE);ve::win(SetCurrentDirectoryW(windows));
         ve::remove_product_files(root,true);ve::launch_final_cleanup(root,!cleanup_smoke);
@@ -48,7 +51,7 @@ LRESULT CALLBACK procedure(HWND h,UINT msg,WPARAM w,LPARAM l){
         window=h;const UINT dpi=GetDpiForWindow(h);ve::window_icons(h,instance,dpi);font=CreateFontW(-MulDiv(16,dpi,96),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Microsoft YaHei UI");
         auto create=[&](const wchar_t* cls,const wchar_t* text,int id,int x,int y,int width,int height){auto child=CreateWindowExW(0,cls,text,WS_VISIBLE|WS_CHILD|WS_TABSTOP,MulDiv(x,dpi,96),MulDiv(y,dpi,96),MulDiv(width,dpi,96),MulDiv(height,dpi,96),h,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),instance,nullptr);SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);return child;};
         create(L"STATIC",(std::wstring(L"卸载 VolumeEdit ")+ve::DisplayVersion).c_str(),0,22,20,515,30);
-        create(L"STATIC",L"将关闭本目录的客户端，恢复它修改的会话音量，\n清除开机启动项及产品文件（包括此卸载程序）。\n恢复失败会保留记录，供你重试；其他文件会保留。",0,22,64,515,98);
+        create(L"STATIC",L"将关闭客户端并恢复音量；若启用了权限辅助，\n将请求管理员确认并清除服务及其受保护文件。\n随后清理启动项和产品文件，其他文件会保留。",0,22,64,515,98);
         status_line=create(L"STATIC",L"准备就绪。",0,22,177,515,100);
         button=create(L"BUTTON",L"卸载",100,22,300,200,38);create(L"BUTTON",L"关闭",101,330,300,200,38);return 0;
     }

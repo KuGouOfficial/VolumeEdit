@@ -1,5 +1,6 @@
 #include "audio.h"
 #include "portable.h"
+#include "permission_helper.h"
 #include <mmdeviceapi.h>
 #include <audiopolicy.h>
 #include <functiondiscoverykeys_devpkey.h>
@@ -27,23 +28,20 @@ std::wstring resolve_target(const std::vector<Device>& active,const std::wstring
     const auto& id=automatic?current:manual;
     return std::any_of(active.begin(),active.end(),[&](const Device& d){return !id.empty()&&d.id==id;})?id:L"";
 }
-static bool our_user(IAudioSessionControl2* control){
+static bool our_user(IAudioSessionControl2* control,unsigned* unverified,unsigned* assisted){
     if(control->IsSystemSoundsSession()==S_OK)return true;
     DWORD pid=0;if(FAILED(control->GetProcessId(&pid))||!pid)return false;
-    Handle process(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,pid));if(!process)return false;
-    HANDLE a=nullptr,b=nullptr;if(!OpenProcessToken(process.get(),TOKEN_QUERY,&a))return false;Handle other(a);
-    if(!OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&b))return false;Handle self(b);
-    DWORD sa=0,sb=0;GetTokenInformation(other.get(),TokenUser,nullptr,0,&sa);GetTokenInformation(self.get(),TokenUser,nullptr,0,&sb);
-    std::vector<BYTE> ua(sa),ub(sb);
-    if(!GetTokenInformation(other.get(),TokenUser,ua.data(),sa,&sa)||!GetTokenInformation(self.get(),TokenUser,ub.data(),sb,&sb))return false;
-    return EqualSid(reinterpret_cast<TOKEN_USER*>(ua.data())->User.Sid,reinterpret_cast<TOKEN_USER*>(ub.data())->User.Sid)!=FALSE;
+    const auto result=process_ownership(pid);
+    if(result.owner==Ownership::Unknown&&unverified)++*unverified;
+    if(result.owner==Ownership::Own&&result.assisted&&assisted)++*assisted;
+    return result.owner==Ownership::Own;
 }
 struct Session{VolumeKey key;std::wstring stable;Com<ISimpleAudioVolume> volume;};
-static std::vector<Session> sessions(const std::wstring& endpoint){
+static std::vector<Session> sessions(const std::wstring& endpoint,unsigned* unverified=nullptr,unsigned* assisted=nullptr){
     auto e=enumerator();Com<IMMDevice> device;hr(e->GetDevice(endpoint.c_str(),&device));Com<IAudioSessionManager2> manager;hr(device->Activate(__uuidof(IAudioSessionManager2),CLSCTX_ALL,nullptr,&manager));
     Com<IAudioSessionEnumerator> list;hr(manager->GetSessionEnumerator(&list));int count=0;hr(list->GetCount(&count));std::vector<Session> out;
     for(int i=0;i<count;++i){
-        Com<IAudioSessionControl> base;if(FAILED(list->GetSession(i,&base)))continue;Com<IAudioSessionControl2> control;if(FAILED(base.As(&control))||!our_user(control.Get()))continue;
+        Com<IAudioSessionControl> base;if(FAILED(list->GetSession(i,&base)))continue;Com<IAudioSessionControl2> control;if(FAILED(base.As(&control))||!our_user(control.Get(),unverified,assisted))continue;
         LPWSTR id=nullptr;if(FAILED(control->GetSessionIdentifier(&id)))continue;Session s;s.stable=id;CoTaskMemFree(id);if(s.stable.empty()||s.stable.find(L'\n')!=std::wstring::npos)continue;
         id=nullptr;if(FAILED(control->GetSessionInstanceIdentifier(&id)))continue;s.key={endpoint,s.stable+L"\n"+id};CoTaskMemFree(id);
         if(SUCCEEDED(base.As(&s.volume)))out.push_back(std::move(s));
@@ -78,7 +76,7 @@ void AudioEngine::start(){if(!thread_.joinable()){ResetEvent(stop_.get());thread
 void AudioEngine::stop(){SetEvent(stop_.get());if(thread_.joinable())thread_.join();state_=AudioState::Stopped;}
 void AudioEngine::retry(){SetEvent(reconnect_.get());}
 Settings AudioEngine::settings(){std::lock_guard lock(mutex_);return settings_;}
-AudioStatus AudioEngine::status(){return {state_.load(),error_.load(),sessions_.load(),saved_.load()?1u:0u,pending_.load(),capped_.load()};}
+AudioStatus AudioEngine::status(){return {state_.load(),error_.load(),sessions_.load(),saved_.load()?1u:0u,pending_.load(),capped_.load(),unverified_.load(),assisted_.load()};}
 bool AudioEngine::configure(const Settings& input,bool persist){
     if(!valid(input))return false;Settings s=input;s.source.clear();s.muted=false;
     if(!s.automatic_target&&resolve_target(devices(),L"",s.target,false).empty())return false;
@@ -95,9 +93,9 @@ void AudioEngine::worker(){
             try{
                 const auto config=settings();const auto active=devices();const auto endpoint=resolve_target(active,config.automatic_target?default_output_id():L"",config.target,config.automatic_target);
                 if(endpoint!=previous||(config.gain_db_x10==0&&previous_gain!=0)){pending_=restore_saved_volumes();previous=endpoint;}previous_gain=config.gain_db_x10;
-                if(endpoint.empty()){state_=AudioState::Waiting;sessions_=0;capped_=0;error_=S_OK;}
+                if(endpoint.empty()){state_=AudioState::Waiting;sessions_=0;capped_=0;unverified_=0;assisted_=0;error_=S_OK;}
                 else{
-                    auto records=load_records();const auto current_sessions=sessions(endpoint);reconcile(records,current_sessions);sessions_=static_cast<unsigned>(current_sessions.size());
+                    unsigned unverified=0,assisted=0;auto records=load_records();const auto current_sessions=sessions(endpoint,&unverified,&assisted);reconcile(records,current_sessions);sessions_=static_cast<unsigned>(current_sessions.size());unverified_=unverified;assisted_=assisted;
                     struct Operation{Session session;float target;bool had_record;VolumeRecord before;};std::vector<Operation> operations;
                     bool changed=false;HRESULT failure=S_OK;unsigned capped=0;
                     for(const auto& session:current_sessions){
