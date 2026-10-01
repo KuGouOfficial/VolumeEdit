@@ -2,6 +2,7 @@
 #include "portable.h"
 #include "gui_snapshot.h"
 #include "icons.h"
+#include "product_version.h"
 #include <commctrl.h>
 #include <shellapi.h>
 #include <memory>
@@ -63,7 +64,7 @@ void status(){
 LRESULT CALLBACK procedure(HWND h,UINT message,WPARAM wp,LPARAM lp){
     if(message==WM_CREATE){
         window=h;dpi=GetDpiForWindow(h);ve::window_icons(h,instance,dpi);font=CreateFontW(-MulDiv(16,dpi,96),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Microsoft YaHei UI");
-        control(L"STATIC",L"VolumeEdit  ·  耳机音量微调",0,22,18,550,30);
+        control(L"STATIC",(std::wstring(L"VolumeEdit ")+ve::DisplayVersion+L"  ·  耳机音量微调").c_str(),0,22,18,550,30);
         control(L"STATIC",L"输出设备",0,22,65,530,22);
         target=control(WC_COMBOBOXW,L"",Target,22,93,550,180,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);
         control(L"STATIC",L"会话音量调节（−40～+40 dB）",0,22,137,530,22);
@@ -126,7 +127,7 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
         ve::Handle singleton;if(!preview){singleton.reset(CreateMutexW(nullptr,FALSE,L"Local\\VolumeEdit.Portable.v3"));if(!singleton)ve::win(FALSE);if(GetLastError()==ERROR_ALREADY_EXISTS){auto other=FindWindowW(L"VolumeEdit.Main",nullptr);if(other){ShowWindow(other,SW_SHOW);SetForegroundWindow(other);}return 0;}ve::ensure_state();}
         INITCOMMONCONTROLSEX common{sizeof(common),ICC_BAR_CLASSES};InitCommonControlsEx(&common);
         WNDCLASSW klass{};klass.hInstance=instance;klass.lpszClassName=L"VolumeEdit.Main";klass.lpfnWndProc=procedure;klass.hCursor=LoadCursorW(nullptr,IDC_ARROW);klass.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);klass.hIcon=ve::product_icon(instance,GetDpiForSystem(),false);RegisterClassW(&klass);
-        const auto system_dpi=GetDpiForSystem();auto h=CreateWindowExW(0,klass.lpszClassName,L"VolumeEdit",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,MulDiv(615,system_dpi,96),MulDiv(550,system_dpi,96),nullptr,nullptr,instance,nullptr);if(!h)return 1;
+        const auto system_dpi=GetDpiForSystem();auto h=CreateWindowExW(0,klass.lpszClassName,L"VolumeEdit",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,MulDiv(615,system_dpi,96),MulDiv(550,system_dpi,96),nullptr,nullptr,instance,nullptr);if(!h)return 1;SetWindowTextW(h,(std::wstring(L"VolumeEdit ")+ve::DisplayVersion).c_str());
         if(wcscmp(args,L"--smoke")==0){
             bool valid=ve::product_icon(instance,96,true)!=nullptr&&ve::product_icon(instance,96,false)!=nullptr&&IsWindow(slider)&&SendMessageW(slider,TBM_GETPOS,0,0)==400&&SendMessageW(target,CB_GETCURSEL,0,0)==0&&SendMessageW(target,CB_GETLBTEXTLEN,0,0)>0;
             SetWindowTextW(numeric,L"40.0");numeric_apply();valid=valid&&SendMessageW(slider,TBM_GETPOS,0,0)==800;
@@ -136,7 +137,7 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
             SendMessageW(h,WM_COMMAND,Zero,0);wchar_t value[32];GetWindowTextW(numeric,value,32);valid=valid&&SendMessageW(slider,TBM_GETPOS,0,0)==400&&wcscmp(value,L"0.0")==0;
             DestroyWindow(h);return valid?0:2;
         }
-        if(preview){SetWindowTextW(status_line,L"解压即用 · 当前为界面预览\n默认 0 dB，点击“音量复位”返回基准。");SetWindowTextW(summary,L"可访问会话：0    原音量记录：0");ShowWindow(h,SW_SHOW);UpdateWindow(h);snapshot(h,ve::executable_directory()/L"client-preview.png");DestroyWindow(h);return 0;}
+        if(preview){SetWindowTextW(status_line,L"解压即用 · 当前为界面预览\n默认 0 dB，点击“音量复位”返回基准。");SetWindowTextW(summary,L"可访问会话：0    原音量记录：0");ShowWindow(h,SW_SHOW);UpdateWindow(h);snapshot(h,ve::executable_directory()/L"reports"/L"client-preview.png");DestroyWindow(h);return 0;}
         engine=std::make_unique<ve::AudioEngine>();const auto settings=engine->settings();SendMessageW(slider,TBM_SETPOS,TRUE,settings.gain_db_x10+400);gain_label();refresh();
         SendMessageW(GetDlgItem(h,Startup),BM_SETCHECK,ve::startup_enabled()?BST_CHECKED:BST_UNCHECKED,0);engine->start();SetTimer(h,2,500,nullptr);SetTimer(h,3,3000,nullptr);
         if(wcscmp(args,L"--tray")!=0)ShowWindow(h,SW_SHOW);MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){if(!IsDialogMessageW(h,&msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}return 0;

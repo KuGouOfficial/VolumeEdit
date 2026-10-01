@@ -22,5 +22,12 @@ jobs:
           name: VolumeEdit-portable-x64
           path: |
             out/VolumeEdit-portable-*-x64.zip
-            out/SHA256SUMS.txt
+            out/VolumeEdit-portable-*-x64.zip.sha256
           if-no-files-found: error
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: VolumeEdit-test-reports
+          path: out/reports/
+          if-no-files-found: warn

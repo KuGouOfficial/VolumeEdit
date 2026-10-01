@@ -1,4 +1,4 @@
-﻿# VolumeEdit
+﻿# VolumeEdit v0.1
 
 <p><img src="assets/volumeedit.png" alt="VolumeEdit 图标" width="96"></p>
 
@@ -8,7 +8,7 @@ Windows 耳机音量微调工具，使用 MSVC C++ 编写。免驱动、免安�
 
 ## 使用
 
-1. 下载并解压 VolumeEdit-portable-0.3.0-x64.zip 到自己可写的独立目录，例如文档文件夹下的 VolumeEdit。请完整解压，不要在压缩包内运行。
+1. 下载并解压 VolumeEdit-portable-v0.1-x64.zip 到自己可写的独立目录，例如文档文件夹下的 VolumeEdit。请完整解压，不要在压缩包内运行。
 2. 双击 VolumeEdit.exe。首次运行固定为 **0.0 dB**，不会降低已有音量；0 dB 有蓝色基准文字及滑块中央标记。
 3. 输出设备默认使用 Windows 当前默认输出，切换 Windows 默认设备后自动跟随。无需修改 Windows 声音输出，也可以手动指定一个设备。
 4. 拖动滑块或输入 −40～40 内的数值后按回车，调节当前用户在该输出设备上的应用会话音量。负值降低音量，正值相对原会话音量提高，0 dB 位于滑块中央；正值达到会话 100% 上限后不再提高，状态区会显示达到上限的会话数。耳机太响时可先尝试 −10 dB，再逐步调整。**音量复位**返回 0 dB 并尝试恢复原会话音量。
@@ -43,3 +43,25 @@ Windows 耳机音量微调工具，使用 MSVC C++ 编写。免驱动、免安�
 源代码沿用仓库的 [Apache-2.0 许可证](LICENSE)。设计见 [DESIGN.md](DESIGN.md)，构建方法见 [DEVELOPMENT.md](DEVELOPMENT.md)，验证记录见 [BUILD_STATUS.md](BUILD_STATUS.md)。公开仓库只包含当前免驱动实现，不提交运行配置、构建缓存或历史驱动产物。
 
 Windows build 工作流会编译、运行检查并上传 ZIP 构建产物，可在 [Actions](https://github.com/KuGouOfficial/VolumeEdit/actions) 中下载。GitHub 的 Code → Download ZIP 下载的是源码，需要开发工具构建；普通用户请使用编译后的 portable ZIP。
+
+## 构建结果中哪些可以运行
+
+版本固定在根目录 [Makefile](Makefile) 的 `VERSION = 0.1`。源码构建后，正式程序直接生成到 `out/`，无需再到版本子目录查找。以下命令仅供开发者；普通用户仍然解压 ZIP、双击 EXE。
+
+| 文件或目录 | 用途 | 普通用户是否需要 |
+| --- | --- | --- |
+| `out/VolumeEdit.exe` | **最终程序**：音量客户端和托盘 | 需要，双击运行 |
+| `out/uninstall.exe` | **最终程序**：图形卸载工具 | 需要，卸载时双击 |
+| `out/product.id` | 部署标识，必须与两个 EXE 放在一起 | 需要保留 |
+| `out/VolumeEdit-portable-v0.1-x64.zip` | **最终发布包**，执行打包后生成；完整解压即可使用 | 推荐下载这一项 |
+| `out/SHA256SUMS.txt` | ZIP 内各产品文件的 SHA-256 校验清单 | 可用于校验 |
+| `out/VolumeEdit-portable-v0.1-x64.zip.sha256` | ZIP 文件本身的 SHA-256 校验值 | 可用于校验 |
+| `out/README.md`、`out/DESIGN.md`、`out/LICENSE` | 使用说明、设计文档和许可证 | 文档，不是程序 |
+| `out/BUILD_STATUS.md` | 随包提供的人工维护验证记录及待验收项 | 报告，不是程序 |
+| `out/reports/test-results.xml`、`test-results.log` | 最近一次自动测试的 JUnit 报告和日志 | 开发报告，不随发布 ZIP 提供 |
+| `out/reports/client-preview.png`、`uninstall-preview.png` | GUI 检查生成的界面预览 | 开发报告，不随发布 ZIP 提供 |
+| `build/*_tests.exe`、`build/Testing/`、其他 `build/` 内容 | 测试程序、CTest 缓存、编译中间文件 | 不需要，不随发布 ZIP 提供 |
+
+`build` 目标只编译；`test` 目标编译并生成报告；`package` 目标编译、测试通过后生成 ZIP 和校验值。`build` 不更新旧测试报告，查看报告时应核对时间。详细命令见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+
+GitHub Actions 的 `VolumeEdit-portable-x64` 产物包含最终 ZIP 及其校验值；`VolumeEdit-test-reports` 产物是开发测试报告。源码目录中的卸载工具仅清理本部署产品和运行配置，保留构建报告、ZIP、源代码及自建文件。

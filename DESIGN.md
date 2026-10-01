@@ -1,4 +1,4 @@
-﻿# VolumeEdit 0.3 设计文档
+﻿# VolumeEdit v0.1 设计文档
 
 ## 目标与已接受的边界
 
@@ -22,6 +22,14 @@
 首次运行在 EXE 同目录创建 state。settings.json 保存用户设置；volumes.txt 保存会话恢复记录；instance.id 是本次部署的 GUID；startup.txt 保存当前及上一次属于本部署的启动命令。各文件原子更新可能产生同名 .tmp。其他目录、AppData、ProgramData 均不用于本产品的持久化数据。
 
 静态链接 MSVC CRT，asInvoker 权限，PerMonitorV2 DPI。没有驱动、服务、虚拟端点、计划任务、HKLM 修改、卸载注册表项或全局 PATH 修改。已启用 DEP、ASLR、CFG。版本未签名；普通桌面 EXE 不依赖内核驱动签名链。
+
+### 构建与版本归属
+
+根目录 Makefile 固定 `VERSION = 0.1`，是产品版本的唯一构建来源。Makefile 兼容 MSVC NMake 和 GNU Make，以 PowerShell 脚本初始化 MSVC，再调用 CMake/Ninja。CMake 直接读取 Makefile，生成 GUI 显示版本、PE 版本资源及程序集 manifest；修改 Makefile 会触发重新配置。打包脚本从同一文件读取版本生成 ZIP 名称，不另存产品版本。0.1 对外显示 v0.1，Windows 数字版本使用 0.1.0.0；配置 schema 版本独立维护。
+
+两个最终 EXE 链接到 out/ 根目录，并配套 product.id 和文档，使该目录可以直接运行。测试 EXE、静态库、对象文件、生成头文件和 manifest 放在 build/。自动测试报告、日志和 GUI 预览放在 out/reports/；这些属于开发验证产物，不能作为用户程序发布。README.md 提供逐项文件分类。
+
+打包只收集两个 EXE、product.id、三份产品 Markdown、LICENSE 和生成的 SHA256SUMS.txt，共 8 个文件；ZIP 文件根目录直接包含它们。out/reports/、state、其他 ZIP 和用户文件均不进入发布包，也不会因打包被删除。ZIP 的校验值单独写入同名 .zip.sha256。GitHub Actions 分别上传发布包和测试报告。BUILD_STATUS.md 是人工维护的验证记录，最近一次 CTest 结果以 out/reports/ 中带时间信息的自动报告为准。
 
 ## 音量控制
 

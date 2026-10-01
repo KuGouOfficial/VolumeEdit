@@ -4,6 +4,7 @@
 
 // Development-only capture of this application's own window for layout review.
 inline void snapshot(HWND window,const std::filesystem::path& path){
+    std::filesystem::create_directories(path.parent_path());
     RECT bounds{};GetWindowRect(window,&bounds);const int width=bounds.right-bounds.left,height=bounds.bottom-bounds.top;
     HDC screen=GetDC(window),memory=CreateCompatibleDC(screen);
     HBITMAP bitmap=CreateCompatibleBitmap(screen,width,height);const auto previous=SelectObject(memory,bitmap);
