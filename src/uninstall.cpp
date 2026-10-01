@@ -2,6 +2,7 @@
 #include "portable.h"
 #include "gui_snapshot.h"
 #include "icons.h"
+#include "product_version.h"
 #include <commctrl.h>
 #include <shellapi.h>
 #include <thread>
@@ -46,7 +47,7 @@ LRESULT CALLBACK procedure(HWND h,UINT msg,WPARAM w,LPARAM l){
     if(msg==WM_CREATE){
         window=h;const UINT dpi=GetDpiForWindow(h);ve::window_icons(h,instance,dpi);font=CreateFontW(-MulDiv(16,dpi,96),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Microsoft YaHei UI");
         auto create=[&](const wchar_t* cls,const wchar_t* text,int id,int x,int y,int width,int height){auto child=CreateWindowExW(0,cls,text,WS_VISIBLE|WS_CHILD|WS_TABSTOP,MulDiv(x,dpi,96),MulDiv(y,dpi,96),MulDiv(width,dpi,96),MulDiv(height,dpi,96),h,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),instance,nullptr);SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);return child;};
-        create(L"STATIC",L"卸载 VolumeEdit",0,22,20,515,30);
+        create(L"STATIC",(std::wstring(L"卸载 VolumeEdit ")+ve::DisplayVersion).c_str(),0,22,20,515,30);
         create(L"STATIC",L"将关闭本目录的客户端，恢复它修改的会话音量，\n清除开机启动项及产品文件（包括此卸载程序）。\n恢复失败会保留记录，供你重试；其他文件会保留。",0,22,64,515,98);
         status_line=create(L"STATIC",L"准备就绪。",0,22,177,515,100);
         button=create(L"BUTTON",L"卸载",100,22,300,200,38);create(L"BUTTON",L"关闭",101,330,300,200,38);return 0;
@@ -77,7 +78,7 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
         cleanup_smoke=wcscmp(args,L"--uninstall-smoke")==0;
         if(cleanup_smoke&&(!root.filename().wstring().starts_with(L"uninstall-test-")||std::filesystem::exists(root/L"state")))return 15;
         WNDCLASSW klass{};klass.hInstance=instance;klass.lpszClassName=L"VolumeEdit.Uninstall";klass.lpfnWndProc=procedure;klass.hIcon=ve::product_icon(instance,GetDpiForSystem(),false);klass.hCursor=LoadCursorW(nullptr,IDC_ARROW);klass.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);RegisterClassW(&klass);
-        const auto dpi=GetDpiForSystem();auto h=CreateWindowExW(0,klass.lpszClassName,L"VolumeEdit 卸载",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU,CW_USEDEFAULT,CW_USEDEFAULT,MulDiv(580,dpi,96),MulDiv(405,dpi,96),nullptr,nullptr,instance,nullptr);if(!h)return 1;
+        const auto dpi=GetDpiForSystem();auto h=CreateWindowExW(0,klass.lpszClassName,L"VolumeEdit 卸载",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU,CW_USEDEFAULT,CW_USEDEFAULT,MulDiv(580,dpi,96),MulDiv(405,dpi,96),nullptr,nullptr,instance,nullptr);if(!h)return 1;SetWindowTextW(h,(std::wstring(L"VolumeEdit ")+ve::DisplayVersion+L" 卸载").c_str());
         if(wcscmp(args,L"--smoke")==0){const bool valid=ve::product_icon(instance,96,true)!=nullptr&&ve::product_icon(instance,96,false)!=nullptr&&IsWindow(button)&&IsWindow(status_line);DestroyWindow(h);return valid?0:2;}
         if(!cleanup_smoke){ShowWindow(h,SW_SHOW);UpdateWindow(h);}else SendMessageW(h,WM_COMMAND,100,0);
         if(preview){snapshot(h,root/L"uninstall-preview.png");DestroyWindow(h);return 0;}

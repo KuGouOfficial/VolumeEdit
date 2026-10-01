@@ -11,7 +11,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1
 
 build.ps1 使用 vswhere 和 VsDevCmd 初始化 MSVC，配置 CMake release preset，构建 VolumeEdit.exe、uninstall.exe 和测试，再运行 CTest。-SkipTests 跳过测试，-Clean 重新构建。
 
-package.ps1 只复制明确的发布文件，不包含旧驱动、安装器、状态、调试符号或开发测试。输出 out/VolumeEdit-portable-0.3.0 和 out/VolumeEdit-portable-0.3.0-x64.zip。调试产物留在 build。
+package.ps1 只复制明确的发布文件，不包含旧驱动、安装器、状态、调试符号或开发测试。输出 out/VolumeEdit-portable-v0.1 和 out/VolumeEdit-portable-v0.1-x64.zip。调试产物留在 build。
 
 ```powershell
 ctest --test-dir build --output-on-failure
@@ -36,3 +36,7 @@ self_delete.ps1 在 build 下创建随机、专用、带产品标记的卸载 EX
 ## 持续集成
 
 .github/workflows/build.yml 在 Windows runner 上调用相同的 package.ps1，完成构建、CTest 和 ZIP 打包。工作流只申请 contents: read，结果作为构建产物上传，不自动发布 Release。无需 WDK、Python 或音频硬件；图标生成器仅在主动重新制作图标时需要 Pillow。
+
+## 版本号
+
+CMakeLists.txt 中的工程版本为 0.1.0，对外显示 v0.1。客户端、卸载界面、Windows 文件版本资源和默认 ZIP 名均由工程版本生成；Windows 文件/程序集版本为 0.1.0.0。设置与恢复记录的 schema 版本独立于产品版本，不因此次重命名重置用户配置。

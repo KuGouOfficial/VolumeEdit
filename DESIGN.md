@@ -1,4 +1,4 @@
-﻿# VolumeEdit 0.3 设计文档
+﻿# VolumeEdit v0.1 设计文档
 
 ## 目标与已接受的边界
 

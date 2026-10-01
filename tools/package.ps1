@@ -1,6 +1,13 @@
-param([ValidatePattern('^VolumeEdit-portable(?:-[0-9]+\.[0-9]+\.[0-9]+)?$')][string]$OutputName='VolumeEdit-portable-0.3.0')
+﻿param([ValidatePattern('^VolumeEdit-portable(?:-v?[0-9]+\.[0-9]+(?:\.[0-9]+)?)?$')][string]$OutputName)
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
+if(-not $OutputName){
+    $taskVersion=[regex]::Match((Get-Content -LiteralPath (Join-Path $taskRoot 'CMakeLists.txt') -Raw),'project\(VolumeEdit VERSION ([0-9]+)\.([0-9]+)\.([0-9]+)')
+    if(-not $taskVersion.Success){throw 'Cannot determine the project version'}
+    $taskDisplayVersion='v{0}.{1}' -f $taskVersion.Groups[1].Value,$taskVersion.Groups[2].Value
+    if([int]$taskVersion.Groups[3].Value -gt 0){$taskDisplayVersion+='.'+$taskVersion.Groups[3].Value}
+    $OutputName='VolumeEdit-portable-'+$taskDisplayVersion
+}
 $taskOut = [IO.Path]::GetFullPath((Join-Path $taskRoot ('out\'+$OutputName)))
 $taskBuild = Join-Path $taskRoot 'build'
 $taskFiles = @('VolumeEdit.exe','uninstall.exe','product.id','README.md','DESIGN.md','BUILD_STATUS.md','LICENSE')

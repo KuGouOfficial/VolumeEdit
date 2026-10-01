@@ -1,4 +1,4 @@
-﻿# VolumeEdit
+﻿# VolumeEdit v0.1
 
 <p><img src="assets/volumeedit.png" alt="VolumeEdit 图标" width="96"></p>
 
@@ -8,7 +8,7 @@ Windows 耳机音量微调工具，使用 MSVC C++ 编写。免驱动、免安�
 
 ## 使用
 
-1. 下载并解压 VolumeEdit-portable-0.3.0-x64.zip 到自己可写的独立目录，例如文档文件夹下的 VolumeEdit。请完整解压，不要在压缩包内运行。
+1. 下载并解压 VolumeEdit-portable-v0.1-x64.zip 到自己可写的独立目录，例如文档文件夹下的 VolumeEdit。请完整解压，不要在压缩包内运行。
 2. 双击 VolumeEdit.exe。首次运行固定为 **0.0 dB**，不会降低已有音量；0 dB 有蓝色基准文字及滑块中央标记。
 3. 输出设备默认使用 Windows 当前默认输出，切换 Windows 默认设备后自动跟随。无需修改 Windows 声音输出，也可以手动指定一个设备。
 4. 拖动滑块或输入 −40～40 内的数值后按回车，调节当前用户在该输出设备上的应用会话音量。负值降低音量，正值相对原会话音量提高，0 dB 位于滑块中央；正值达到会话 100% 上限后不再提高，状态区会显示达到上限的会话数。耳机太响时可先尝试 −10 dB，再逐步调整。**音量复位**返回 0 dB 并尝试恢复原会话音量。

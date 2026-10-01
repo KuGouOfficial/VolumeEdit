@@ -1,0 +1,4 @@
+#pragma once
+namespace ve {
+inline constexpr wchar_t DisplayVersion[]=L"@VOLUMEEDIT_DISPLAY_VERSION@";
+}
