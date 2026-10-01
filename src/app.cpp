@@ -54,7 +54,7 @@ void tray(bool add){if(preview)return;NOTIFYICONDATAW n{sizeof(n)};n.hWnd=window
 void show(){ShowWindow(window,SW_SHOW);SetForegroundWindow(window);}
 void status(){
     if(!engine)return;const auto s=engine->status();std::wstring text;
-    switch(s.state){case ve::AudioState::Running:text=L"正在调节当前用户的应用会话音量";break;case ve::AudioState::Waiting:text=L"等待输出设备或有效配置";break;case ve::AudioState::Error:text=L"音量调节未完成";break;default:text=L"正在启动";}
+    switch(s.state){case ve::AudioState::Running:text=L"音量控制已启用";break;case ve::AudioState::Waiting:text=L"等待输出设备或有效配置";break;case ve::AudioState::Error:text=L"音量调节未完成";break;default:text=L"正在启动";}
     if(FAILED(s.error))text+=L"\n"+ve::error_text(static_cast<DWORD>(s.error));
     if(s.capped_sessions)text+=L"\n"+std::to_wstring(s.capped_sessions)+L" 个会话已达到 100% 上限，无法继续提高。";
     if(!s.saved)text+=L"\n配置未保存；请确认解压目录可写。";
