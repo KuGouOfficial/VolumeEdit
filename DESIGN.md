@@ -51,7 +51,7 @@ legacy_recovery.cpp 仅在旧 volumes.txt 存在时进行兼容恢复，约每 3
 
 跨部署只在同设备、同稳定身份、各自唯一候选、旧 applied 与新 original 一致且无未完成事务时确认衰减链，将新 original 提升到最早基准。重复同实例且内容冲突则拒绝；其他歧义保留。先备份源文件，先持久化合并任务，再删除来源重复任务，禁止无依据重置全部应用。
 
-2026-10-02 本机合并 out 和旧解压目录记录。Chrome、游戏、Riot 已恢复及核对；PowerShell 通过隐藏零 PCM 流重建可访问会话后处理。剩余 WSL msrdc 会话不存在，继续保留。迁移工具仅在 build，旧数据备份只在 out/reports，不提交或发布。
+2026-10-02 本机合并 out 和旧解压目录记录。Chrome、游戏、Riot 已恢复及核对；PowerShell 通过隐藏零 PCM 流重建可访问会话后处理。WSL 通过静音 PulseAudio 流重建会话后处理，当前旧恢复记录已清空。迁移工具仅在 build，旧数据备份只在 out/reports，不提交或发布。
 
 旧辅助程序保留作兼容恢复/清理。客户端删除启用/更新服务入口，开机启动不再配置服务；有 helper.txt 时才显示“清理旧版辅助服务”。UAC 后验证 GUID、SID、来源目录、SCM 路径、Program Files ACL，停止服务、等待进程退出、删除并确认 SCM 对象消失，再清理固定文件及空目录。清理可由同目录 VolumeEdit.exe 或 uninstall.exe 发起；正常运行不注册服务。
 
