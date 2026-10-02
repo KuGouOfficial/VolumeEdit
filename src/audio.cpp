@@ -1,128 +1,82 @@
 #include "audio.h"
 #include "portable.h"
-#include "permission_helper.h"
 #include <mmdeviceapi.h>
-#include <audiopolicy.h>
+#include <endpointvolume.h>
 #include <functiondiscoverykeys_devpkey.h>
 #include <algorithm>
 #include <cmath>
-#include <set>
-
 namespace ve {
-static const GUID Context={0x7cda93b4,0x456c,0x4d42,{0xa5,0x89,0xbb,0xb3,0x15,0x67,0xa6,0x94}};
+static const GUID Context={0xe3a3d3d9,0x25a4,0x4261,{0xaa,0x49,0x39,0xef,0xa1,0x29,0x7b,0xd5}};
 static Com<IMMDeviceEnumerator> enumerator(){Com<IMMDeviceEnumerator> value;hr(CoCreateInstance(__uuidof(MMDeviceEnumerator),nullptr,CLSCTX_ALL,IID_PPV_ARGS(&value)));return value;}
-std::vector<Device> devices(){
-    auto e=enumerator();Com<IMMDeviceCollection> collection;hr(e->EnumAudioEndpoints(eRender,DEVICE_STATE_ACTIVE,&collection));UINT count=0;hr(collection->GetCount(&count));std::vector<Device> out;
-    for(UINT i=0;i<count;++i){
-        Com<IMMDevice> d;hr(collection->Item(i,&d));LPWSTR id=nullptr;hr(d->GetId(&id));Device item;item.id=id;CoTaskMemFree(id);
-        Com<IPropertyStore> store;hr(d->OpenPropertyStore(STGM_READ,&store));PROPVARIANT name;PropVariantInit(&name);
-        if(SUCCEEDED(store->GetValue(PKEY_Device_FriendlyName,&name))&&name.vt==VT_LPWSTR)item.name=name.pwszVal;
-        PropVariantClear(&name);out.push_back(std::move(item));
-    }return out;
+std::vector<Device> devices(){auto e=enumerator();Com<IMMDeviceCollection> all;hr(e->EnumAudioEndpoints(eRender,DEVICE_STATE_ACTIVE,&all));UINT count=0;hr(all->GetCount(&count));std::vector<Device> out;
+    for(UINT i=0;i<count;++i){Com<IMMDevice> d;hr(all->Item(i,&d));LPWSTR id=nullptr;hr(d->GetId(&id));Device item;item.id=id;CoTaskMemFree(id);Com<IPropertyStore> store;hr(d->OpenPropertyStore(STGM_READ,&store));PROPVARIANT name;PropVariantInit(&name);
+        if(SUCCEEDED(store->GetValue(PKEY_Device_FriendlyName,&name))&&name.vt==VT_LPWSTR)item.name=name.pwszVal;PropVariantClear(&name);out.push_back(std::move(item));}return out;
 }
-std::wstring default_output_id(){
-    auto e=enumerator();Com<IMMDevice> d;const auto result=e->GetDefaultAudioEndpoint(eRender,eConsole,&d);if(result==E_NOTFOUND)return {};hr(result);
-    LPWSTR id=nullptr;hr(d->GetId(&id));std::wstring out=id;CoTaskMemFree(id);return out;
-}
-std::wstring resolve_target(const std::vector<Device>& active,const std::wstring& current,const std::wstring& manual,bool automatic){
-    const auto& id=automatic?current:manual;
-    return std::any_of(active.begin(),active.end(),[&](const Device& d){return !id.empty()&&d.id==id;})?id:L"";
-}
-static bool our_user(IAudioSessionControl2* control,unsigned* unverified,unsigned* assisted){
-    if(control->IsSystemSoundsSession()==S_OK)return true;
-    DWORD pid=0;if(FAILED(control->GetProcessId(&pid))||!pid)return false;
-    const auto result=process_ownership(pid);
-    if(result.owner==Ownership::Unknown&&unverified)++*unverified;
-    if(result.owner==Ownership::Own&&result.assisted&&assisted)++*assisted;
-    return result.owner==Ownership::Own;
-}
-struct Session{VolumeKey key;std::wstring stable;Com<ISimpleAudioVolume> volume;};
-static std::vector<Session> sessions(const std::wstring& endpoint,unsigned* unverified=nullptr,unsigned* assisted=nullptr){
-    auto e=enumerator();Com<IMMDevice> device;hr(e->GetDevice(endpoint.c_str(),&device));Com<IAudioSessionManager2> manager;hr(device->Activate(__uuidof(IAudioSessionManager2),CLSCTX_ALL,nullptr,&manager));
-    Com<IAudioSessionEnumerator> list;hr(manager->GetSessionEnumerator(&list));int count=0;hr(list->GetCount(&count));std::vector<Session> out;
-    for(int i=0;i<count;++i){
-        Com<IAudioSessionControl> base;if(FAILED(list->GetSession(i,&base)))continue;Com<IAudioSessionControl2> control;if(FAILED(base.As(&control))||!our_user(control.Get(),unverified,assisted))continue;
-        LPWSTR id=nullptr;if(FAILED(control->GetSessionIdentifier(&id)))continue;Session s;s.stable=id;CoTaskMemFree(id);if(s.stable.empty()||s.stable.find(L'\n')!=std::wstring::npos)continue;
-        id=nullptr;if(FAILED(control->GetSessionInstanceIdentifier(&id)))continue;s.key={endpoint,s.stable+L"\n"+id};CoTaskMemFree(id);
-        if(SUCCEEDED(base.As(&s.volume)))out.push_back(std::move(s));
-    }return out;
-}
-static void reconcile(VolumeRecords& records,const std::vector<Session>& active){
-    // Session identifiers can be shared by simultaneous process instances.
-    // Restore exact instances first; migrate a closed instance only when all
-    // matching backups agree and just one replacement instance is present.
-    std::vector<VolumeKey> keys;for(const auto& session:active)keys.push_back(session.key);reconcile_records(records,keys);
-}
-unsigned restore_saved_volumes(){
-    refuse_reparse(state_directory());auto records=load_records();if(records.empty())return 0;
-    std::set<std::wstring> endpoints;for(const auto& [key,value]:records){(void)value;endpoints.insert(key.first);}
-    for(const auto& endpoint:endpoints){
-        try{const auto active=sessions(endpoint);reconcile(records,active);for(const auto& session:active){
-            const auto found=records.find(session.key);if(found==records.end())continue;
-            float current=0;if(FAILED(session.volume->GetMasterVolume(&current)))continue;
-            // A later application/mixer change belongs to the user. Never undo it.
-            if(!record_matches(current,found->second)||SUCCEEDED(session.volume->SetMasterVolume(found->second.original,&Context)))records.erase(found);
-        }}catch(const Failure&){}
-    }
-    save_records(records);return static_cast<unsigned>(records.size());
+std::wstring default_output_id(){auto e=enumerator();Com<IMMDevice> d;auto result=e->GetDefaultAudioEndpoint(eRender,eConsole,&d);if(result==E_NOTFOUND)return {};hr(result);LPWSTR id=nullptr;hr(d->GetId(&id));std::wstring out=id;CoTaskMemFree(id);return out;}
+std::wstring resolve_target(const std::vector<Device>& active,const std::wstring& current,const std::wstring& manual,bool automatic){const auto& id=automatic?current:manual;return std::any_of(active.begin(),active.end(),[&](const Device& d){return !id.empty()&&d.id==id;})?id:L"";}
+static Com<IAudioEndpointVolume> endpoint_volume(const std::wstring& id){auto e=enumerator();Com<IMMDevice> d;hr(e->GetDevice(id.c_str(),&d));Com<IAudioEndpointVolume> volume;hr(d->Activate(__uuidof(IAudioEndpointVolume),CLSCTX_ALL,nullptr,&volume));return volume;}
+unsigned restore_endpoint_volumes(){auto records=load_endpoint_records();
+    for(auto it=records.begin();it!=records.end();){try{auto volume=endpoint_volume(it->first);float current=0;hr(volume->GetMasterVolumeLevel(&current));
+        if(endpoint_matches(current,it->second))hr(volume->SetMasterVolumeLevel(it->second.original,&Context));it=records.erase(it);
+    }catch(const Failure&){++it;} }save_endpoint_records(records);return static_cast<unsigned>(records.size());
 }
 AudioEngine::AudioEngine():stop_(CreateEventW(nullptr,TRUE,FALSE,nullptr)),reconnect_(CreateEventW(nullptr,FALSE,FALSE,nullptr)){
-    if(!stop_||!reconnect_)win(FALSE);
-    const auto file=state_directory()/L"settings.json";
-    if(std::filesystem::exists(file))try{settings_=load_settings(file);settings_.muted=false;}catch(...){saved_=false;ready_=false;settings_.gain_db_x10=0;}
+    if(!stop_||!reconnect_)win(FALSE);auto path=state_directory()/L"settings.json";
+    if(std::filesystem::exists(path))try{settings_=load_settings(path);settings_.muted=false;}catch(...){status_.saved=0;ready_=false;}
 }
 AudioEngine::~AudioEngine(){stop();}
 void AudioEngine::start(){if(!thread_.joinable()){ResetEvent(stop_.get());thread_=std::thread(&AudioEngine::worker,this);}}
-void AudioEngine::stop(){SetEvent(stop_.get());if(thread_.joinable())thread_.join();state_=AudioState::Stopped;}
+void AudioEngine::stop(){SetEvent(stop_.get());if(thread_.joinable())thread_.join();std::lock_guard lock(mutex_);status_.state=AudioState::Stopped;}
 void AudioEngine::retry(){SetEvent(reconnect_.get());}
 Settings AudioEngine::settings(){std::lock_guard lock(mutex_);return settings_;}
-AudioStatus AudioEngine::status(){return {state_.load(),error_.load(),sessions_.load(),saved_.load()?1u:0u,pending_.load(),capped_.load(),unverified_.load(),assisted_.load()};}
-bool AudioEngine::configure(const Settings& input,bool persist){
-    if(!valid(input))return false;Settings s=input;s.source.clear();s.muted=false;
-    if(!s.automatic_target&&resolve_target(devices(),L"",s.target,false).empty())return false;
-    std::lock_guard lock(mutex_);settings_=s;ready_=true;
-    if(persist)try{save_settings(state_directory()/L"settings.json",s);saved_=true;}catch(...){saved_=false;}
-    SetEvent(reconnect_.get());return true;
+AudioStatus AudioEngine::status(){std::lock_guard lock(mutex_);return status_;}
+bool AudioEngine::configure(const Settings& input,bool persist){if(!valid(input))return false;Settings value=input;value.source.clear();value.muted=false;
+    if(!value.automatic_target&&resolve_target(devices(),L"",value.target,false).empty())return false;std::lock_guard lock(mutex_);settings_=value;ready_=true;
+    if(persist)try{save_settings(state_directory()/L"settings.json",value);status_.saved=1;}catch(...){status_.saved=0;}
+    ++revision_;SetEvent(reconnect_.get());return true;
 }
-void AudioEngine::worker(){
-    try{
-        Apartment apartment;ensure_state();std::wstring previous;int previous_gain=1;
-        const HANDLE events[]={stop_.get(),reconnect_.get()};
-        while(WaitForSingleObject(stop_.get(),0)!=WAIT_OBJECT_0){
-            if(!ready_){state_=AudioState::Waiting;error_=HRESULT_FROM_WIN32(ERROR_INVALID_DATA);if(WaitForMultipleObjects(2,events,FALSE,50)==WAIT_OBJECT_0)break;continue;}
-            try{
-                const auto config=settings();const auto active=devices();const auto endpoint=resolve_target(active,config.automatic_target?default_output_id():L"",config.target,config.automatic_target);
-                if(endpoint!=previous||(config.gain_db_x10==0&&previous_gain!=0)){pending_=restore_saved_volumes();previous=endpoint;}previous_gain=config.gain_db_x10;
-                if(endpoint.empty()){state_=AudioState::Waiting;sessions_=0;capped_=0;unverified_=0;assisted_=0;error_=S_OK;}
-                else{
-                    unsigned unverified=0,assisted=0;auto records=load_records();const auto current_sessions=sessions(endpoint,&unverified,&assisted);reconcile(records,current_sessions);sessions_=static_cast<unsigned>(current_sessions.size());unverified_=unverified;assisted_=assisted;
-                    struct Operation{Session session;float target;bool had_record;VolumeRecord before;};std::vector<Operation> operations;
-                    bool changed=false;HRESULT failure=S_OK;unsigned capped=0;
-                    for(const auto& session:current_sessions){
-                        float current=0;if(FAILED(session.volume->GetMasterVolume(&current)))continue;
-                        const auto old=records.find(session.key);const bool had=old!=records.end();const VolumeRecord before=had?old->second:VolumeRecord{};
-                        if(conflicting_alias(records,session.key)){
-                            failure=HRESULT_FROM_WIN32(ERROR_INVALID_DATA);continue;
-                        }
-                        const auto adjustment=adjusted_volume(current,config.gain_db_x10,had?&before:nullptr);const float target=adjustment.applied;
-                        if(config.gain_db_x10>0&&target>=1.0f)++capped;
-                        if(same_volume(target,current)){if(had&&config.gain_db_x10==0){records.erase(session.key);changed=true;}continue;}
-                        records[session.key]=adjustment;changed=true;operations.push_back({session,target,had,before});
-                    }
-                    if(changed)save_records(records); // Durable backup before touching any session.
-                    for(const auto& operation:operations){
-                        const auto result=operation.session.volume->SetMasterVolume(operation.target,&Context);
-                        if(FAILED(result)){failure=result;if(operation.had_record)records[operation.session.key]=operation.before;else records.erase(operation.session.key);}
-                        else if(config.gain_db_x10==0)records.erase(operation.session.key);
-                        else records[operation.session.key].pending_from=-1;
-                    }
-                    if(changed)save_records(records);pending_=static_cast<unsigned>(records.size());capped_=capped;error_=failure;state_=FAILED(failure)?AudioState::Error:AudioState::Running;
+void AudioEngine::worker(){try{
+    Apartment apartment;ensure_state();std::wstring selected;Com<IAudioEndpointVolume> volume;float baseline=0,last=0,minimum=0,maximum=0,increment=0;bool have_last=false;
+    unsigned seen_revision=revision_;ULONGLONG legacy_check=0;AudioStatus published;const HANDLE events[]={stop_.get(),reconnect_.get()};
+    while(WaitForSingleObject(stop_.get(),0)!=WAIT_OBJECT_0){try{
+        Settings config;bool ready;unsigned revision;{std::lock_guard lock(mutex_);config=settings_;ready=ready_;published.saved=status_.saved;revision=revision_;}
+        if(!ready){published.state=AudioState::Waiting;published.error=HRESULT_FROM_WIN32(ERROR_INVALID_DATA);}
+        else{
+            if(GetTickCount64()>=legacy_check){published.pending_restore=restore_saved_volumes();legacy_check=GetTickCount64()+3000;}
+            const auto id=resolve_target(devices(),config.automatic_target?default_output_id():L"",config.target,config.automatic_target);const bool configured=revision!=seen_revision;
+            auto records=load_endpoint_records();
+            if(id!=selected||!volume){if(!selected.empty())published.pending_endpoints=restore_endpoint_volumes();records=load_endpoint_records();volume.Reset();selected=id;have_last=false;
+                if(!id.empty()){volume=endpoint_volume(id);hr(volume->GetVolumeRange(&minimum,&maximum,&increment));hr(volume->GetMasterVolumeLevel(&baseline));last=baseline;
+                    auto old=records.find(id);if(old!=records.end()){if(endpoint_matches(baseline,old->second)){baseline=old->second.original;last=baseline;hr(volume->GetMasterVolumeLevel(&last));have_last=true;}else{records.erase(old);save_endpoint_records(records);}}
                 }
-            }catch(const Failure& f){state_=AudioState::Error;error_=f.code;}
-            catch(...){state_=AudioState::Error;error_=E_FAIL;}
-            if(WaitForMultipleObjects(2,events,FALSE,50)==WAIT_OBJECT_0)break;
+            }
+            if(!volume){published.state=AudioState::Waiting;published.error=S_OK;}
+            else{
+                float current=0;hr(volume->GetMasterVolumeLevel(&current));
+                // A Windows slider/device-key change takes priority over this tool.
+                if(!configured&&((have_last&&!same_db(current,last))||(!have_last&&!same_db(current,baseline)))){
+                    baseline=current;last=current;have_last=false;records.erase(id);save_endpoint_records(records);config.gain_db_x10=0;
+                    {std::lock_guard lock(mutex_);if(revision_==revision){settings_.gain_db_x10=0;try{save_settings(state_directory()/L"settings.json",settings_);published.saved=1;}catch(...){published.saved=0;}}}
+                    published.external_change=true;
+                }else if(configured)published.external_change=false;
+                const auto desired=endpoint_target(baseline,config.gain_db_x10,minimum,maximum);
+                if(!same_db(current,desired)){
+                    auto previous=records;records[id]={baseline,desired,current};save_endpoint_records(records);
+                    const auto result=volume->SetMasterVolumeLevel(desired,&Context);
+                    if(FAILED(result)){save_endpoint_records(previous);hr(result);}
+                    hr(volume->GetMasterVolumeLevel(&current));records[id]={baseline,current};save_endpoint_records(records);last=current;have_last=true;
+                }
+                if(config.gain_db_x10==0&&records.contains(id)){records.erase(id);save_endpoint_records(records);have_last=false;last=current;}
+                published.state=AudioState::Running;published.error=S_OK;published.current_db=current;published.baseline_db=baseline;published.minimum_db=minimum;published.maximum_db=maximum;published.increment_db=increment;
+                published.limited=!same_db(desired,baseline+config.gain_db_x10/10.0f);published.pending_endpoints=static_cast<unsigned>(records.size());
+            }seen_revision=revision;
         }
-        try{pending_=restore_saved_volumes();error_=S_OK;}catch(...){pending_=1;saved_=false;error_=E_FAIL;}
-    }catch(const Failure& f){state_=AudioState::Error;error_=f.code;}catch(...){state_=AudioState::Error;error_=E_FAIL;}
-}
+    }catch(const Failure& f){published.state=AudioState::Error;published.error=f.code;volume.Reset();}
+     catch(...){published.state=AudioState::Error;published.error=E_FAIL;volume.Reset();}
+        {std::lock_guard lock(mutex_);status_=published;}
+        if(WaitForMultipleObjects(2,events,FALSE,100)==WAIT_OBJECT_0)break;
+    }
+    try{published.pending_endpoints=restore_endpoint_volumes();published.pending_restore=restore_saved_volumes();published.error=S_OK;}catch(const Failure& f){published.error=f.code;}catch(...){published.error=E_FAIL;}
+    {std::lock_guard lock(mutex_);status_=published;}
+}catch(const Failure& f){std::lock_guard lock(mutex_);status_.state=AudioState::Error;status_.error=f.code;}catch(...){std::lock_guard lock(mutex_);status_.state=AudioState::Error;status_.error=E_FAIL;}}
 }

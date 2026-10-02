@@ -3,6 +3,7 @@
 #include <cstdint>
 
 namespace ve {
+// Legacy compatibility only; endpoint volume control does not use this helper.
 enum class Ownership : unsigned {Unknown, Own, Other};
 struct OwnershipResult {Ownership owner=Ownership::Unknown;DWORD error{};bool assisted=false;};
 OwnershipResult process_ownership(DWORD pid, bool assist=true);

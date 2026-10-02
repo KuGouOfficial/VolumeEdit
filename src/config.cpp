@@ -42,7 +42,7 @@ static std::string quote(const std::wstring& text) {
 }
 std::string serialize(const Settings& s) {
     if(!valid(s)) throw std::invalid_argument("Invalid settings");
-    return "{\n  \"schema_version\": 3,\n  \"gain_db_x10\": "+std::to_string(s.gain_db_x10)
+    return "{\n  \"schema_version\": 4,\n  \"gain_db_x10\": "+std::to_string(s.gain_db_x10)
         +",\n  \"muted\": "+(s.muted?"true":"false")+",\n  \"source_endpoint_id\": "+quote(s.source)
         +",\n  \"automatic_target\": "+(s.automatic_target?"true":"false")
         +",\n  \"target_endpoint_id\": "+quote(s.target)+"\n}\n";
@@ -84,7 +84,7 @@ Settings parse_settings(const std::string& text) {
     Parser p(text); p.need('{'); Settings out; unsigned seen=0;int version=0;
     do {
         const auto key=p.string(); p.need(':'); unsigned bit=0;
-        if(key==L"schema_version"){bit=1;version=p.number();if(version!=1&&version!=2&&version!=3)throw std::invalid_argument("Unsupported schema");}
+        if(key==L"schema_version"){bit=1;version=p.number();if(version<1||version>4)throw std::invalid_argument("Unsupported schema");}
         else if(key==L"gain_db_x10"){bit=2;out.gain_db_x10=p.number();}
         else if(key==L"muted"){bit=4;out.muted=p.boolean();}
         else if(key==L"source_endpoint_id"){bit=8;out.source=p.string();}
@@ -99,6 +99,8 @@ Settings parse_settings(const std::string& text) {
     if(version<3&&out.gain_db_x10>=-800&&out.gain_db_x10<MinGain)out.gain_db_x10=MinGain;
     if(seen!=(version==1?31u:63u)||!valid(out))throw std::invalid_argument("Invalid settings");
     if(version==1)out.automatic_target=false; // Preserve the previous user's explicit routing.
+    // Session attenuation and endpoint dB offsets have different meanings.
+    if(version<4)out.gain_db_x10=0;
     return out;
 }
 Settings load_settings(const std::filesystem::path& path) {

@@ -1,80 +1,62 @@
-# VolumeEdit v0.1（权限辅助试验版）
+# VolumeEdit v0.1 · 总音量微调
 
 <p><img src="assets/volumeedit.png" alt="VolumeEdit 图标" width="96"></p>
 
-[Apache-2.0 许可证](LICENSE) · [设计文档](DESIGN.md) · [开发构建](DEVELOPMENT.md) · [问题反馈](https://github.com/KuGouOfficial/VolumeEdit/issues)
+[Apache-2.0 许可证](LICENSE) · [设计文档](DESIGN.md) · [开发构建](DEVELOPMENT.md) · [验证记录](BUILD_STATUS.md)
 
-Windows 耳机音量微调工具，使用 MSVC C++ 编写。免驱动、免安装向导，默认解压后双击运行；遇到进程权限问题时，可手动启用高权限辅助服务。当前版本调节应用会话音量：**−40～+40 dB**，步进 0.1 dB。程序采用深蓝底、青色耳机和橙色调节钮的专属图标，文件、窗口和托盘统一显示。
+Windows 原生 C++ 图形客户端，直接按 dB 调节当前默认输出设备的 **Windows 总音量**。解压运行，无驱动、无安装向导，正常使用不注册服务、不需要管理员权限。统一耳机图标、托盘和单一开机启动开关。
 
 ## 使用
 
-1. 下载并解压 VolumeEdit-portable-v0.1-x64.zip 到自己可写的独立目录，例如文档文件夹下的 VolumeEdit。请完整解压，不要在压缩包内运行。
-2. 双击 VolumeEdit.exe。首次运行固定为 **0.0 dB**，不会降低已有音量；0 dB 有蓝色基准文字及滑块中央标记。
-3. 输出设备默认使用 Windows 当前默认输出，切换 Windows 默认设备后自动跟随。无需修改 Windows 声音输出，也可以手动指定一个设备。
-4. 拖动滑块或输入 −40～40 内的数值后按回车，调节当前用户在该输出设备上的应用会话音量。负值降低音量，正值相对原会话音量提高，0 dB 位于滑块中央；正值达到会话 100% 上限后不再提高，状态区会显示达到上限的会话数。耳机太响时可先尝试 −10 dB，再逐步调整。**音量复位**返回 0 dB 并尝试恢复原会话音量。
-5. 勾选唯一的 **开机启动** 开关，下次当前用户登录 Windows 后自动运行到托盘。不需要管理员权限。关闭窗口继续在托盘运行；右键托盘选择“退出并恢复音量”才会停止处理。
+1. 完整解压 VolumeEdit-portable-v0.1-x64.zip 到自己可写的独立目录。
+2. 双击 **VolumeEdit.exe**。首次运行固定在 **0.0 dB**，表示相对于启用时总音量的偏移。蓝色文字和中央标记表示基准；设备实际 0 dB 通常代表最大音量，两者不要混淆。
+3. 输出默认跟随 Windows 当前默认输出设备，无需手动选择；也可指定设备。
+4. 拖动滑块或输入 **−40～+40 dB** 后按回车，**音量复位**返回基准。Windows 总音量滑块同步变化；界面显示设备实际 dB、基准、范围和步进。
+5. 勾选 **开机启动**，下次当前用户登录后自动运行到托盘，并加载保存配置。关闭窗口继续运行；托盘右键“退出并恢复音量”停止控制并尝试恢复设备基准。
 
-修改后的调节值和设备选择保存在本目录的 state 中，下次运行会加载。0 dB 是首次使用和复位的基准。请保留整个目录；移动目录后重新切换一次开机启动，以更新启动路径。已启用权限辅助时，先点击“启用/更新权限辅助”更新服务对应的目录，再切换开机启动。
+硬件只接受自身范围和步进。当前测试 C-Media 输出为 **−45～0 dB、1 dB 步进**。越界目标限制到边界并提示；0.1 dB 输入精度不代表硬件精度。达到最低值后仍太响，本接口不能继续增加衰减，也不提供超过设备最大值的混音后增益。
 
-旧版保存的调节值若低于 −40 dB，新版会按 −40 dB 加载，输出设备设置保留。其他合法配置继续加载。更新前先从托盘退出旧版，再用新版 ZIP 覆盖原目录的产品文件，并保留 state；不要同时运行两份复制的 state。
+手动使用 Windows 音量滑块或音量键时，程序尊重更改，将当前总音量作为新的 0 dB 基准并复位偏移；退出不会覆盖这次更改。程序没有静音按钮，也不更改 Windows 静音标志。
+
+设置和恢复依据保存在本目录 state。更新前从托盘退出旧版，覆盖产品文件并保留 state；移动后切换一次开机启动以更新路径。不要轮流使用多个各有状态的旧副本。
+
+## 旧版影响与升级
+
+旧版修改应用会话音量。新版读取旧配置时保留设备选择，将旧会话衰减值迁移为 **0 dB 总音量偏移**，避免混用含义。旧 volumes.txt 仅用于兼容恢复，新控制不再逐个修改应用会话。
+
+有备份且相关音频会话可访问时，尝试恢复原会话音量。用户或应用已经另行修改的值保持不动。关闭应用、断开的设备或有多实例歧义的记录保留，应用重新发声后自动重试；界面显示“旧版待恢复”数量，**退出不再因历史任务反复弹窗**。不能将保留任务描述为已全部恢复。
+
+以前试用过服务的部署会显示 **清理旧版辅助服务**。点击并按 UAC 确认，可删除该部署的服务及受保护文件。新版总音量控制不需要服务；清理旧系统服务仍须管理员授权。
+
+恢复旧会话音量可能让声音变大，建议先降低总音量。不要直接删除 volumes.txt，以免丢失恢复依据。“重置所有应用音量”还会改变其他应用的自定义音量，不能作为针对本产品的恢复。
 
 ## 卸载
 
-双击同目录的 **uninstall.exe**，点击“卸载”。它会关闭本目录的客户端、恢复本工具记录的会话原音量、删除属于此部署的当前用户启动项，以及产品文件和 state。最后自动关闭卸载窗口并显示清理结果，不需要输入命令。
+双击 **uninstall.exe**，点击“卸载”。它关闭本目录客户端，恢复记录中的设备总音量与旧会话音量，清理本部署的启动项、状态和产品文件；如仍有旧服务，按管理员提示完成清理。
 
-如果原设备断开、相关应用已经关闭、恢复记录损坏或文件被占用，卸载会提示未完成。恢复音量失败时不会删除恢复记录和产品文件：请重新连接原设备、打开相关应用后重试。不要先手动删除 state，否则无法按记录恢复原音量。
+原设备离线或旧会话尚不可恢复时，卸载提示未完成并保留记录和程序。正常退出安静保留任务，完整卸载则要求先处理待恢复项，避免丢失依据后声称无残留。
 
-最后的自身文件清理由 Windows 内置 PowerShell 在隐藏进程中完成；它等待卸载程序退出，只删除明确指定的文件，不生成临时脚本、服务或计划任务。若系统禁止 PowerShell 运行，最后清理会失败；保留目录并重试。产品文件删除后仍存在的自建文件会保留。若最后清理只剩 product.id，请重新解压卸载程序到原目录后重试。
+自身 EXE 由系统 PowerShell 隐藏进程在退出后清理，不生成临时脚本、持久任务或注册表延迟删除项。自建文件、ZIP、源码和报告保留，空产品目录才删除。PowerShell 被禁用、文件占用或权限异常时请保留卸载程序重试。本产品不清理 Windows 或安全软件独立产生的日志和缓存。
 
-默认模式不创建驱动、虚拟音频设备、Windows 服务、计划任务、开始菜单项或“已安装的应用”记录；勾选开机启动只写当前用户 Run 值。手动启用权限辅助后，还会注册属于本部署的系统服务并将服务文件放入 Program Files 的受保护目录，卸载负责清理这些资源。
+## 哪些文件是程序
 
-## 可选权限辅助
+版本固定在 [Makefile](Makefile) 的 VERSION = 0.1，默认构建直接输出到 out/。
 
-本试验针对“音量会话存在，但进程用户身份查询被拒绝”导致的漏控，例如当前机器上的英雄联盟客户端渲染进程。它不能替代混音后 DSP，也不保证解决独占、ASIO 或应用不断重设音量的问题。
+| 文件或目录 | 分类及用途 |
+| --- | --- |
+| out/VolumeEdit.exe | **最终程序**：总音量客户端，双击运行 |
+| out/uninstall.exe | **最终程序**：图形卸载工具 |
+| out/VolumeEditBroker.exe | **旧版兼容程序**：旧服务恢复与清理，正常用户不直接运行 |
+| out/product.id | 必须与 EXE 一起保留的部署标记 |
+| out/VolumeEdit-portable-v0.1-x64.zip | **最终发布包**，完整解压即可运行 |
+| out/SHA256SUMS.txt、out/*.zip.sha256 | 文件及 ZIP 校验清单 |
+| out/README.md、DESIGN.md、LICENSE | 产品文档及许可证 |
+| out/BUILD_STATUS.md | 人工验证报告，不是程序 |
+| out/reports/test-results.xml、test-results.log | 自动测试报告，不随 ZIP 发布 |
+| out/reports/*-preview.png | 开发界面预览，不随 ZIP 发布 |
+| out/reports/legacy-reset-* | 本机旧配置备份和迁移结果，不提交或发布 |
+| build/ | 中间文件、测试及诊断工具，不是产品 |
 
-点击 **启用权限辅助**，按 Windows 提示进行一次管理员确认。成功后服务以 LocalSystem 身份运行，帮助确认进程是否属于当前用户；界面和实际调音仍在当前用户会话中。状态显示“音量控制已启用”，这是持续运行提示，不是尚未完成的进度。无法确认归属的会话会显示数量，继续保持原音量。
+Windows x64、MSVC C++20、静态运行库，无需 Visual Studio 或证书。源代码 Apache-2.0。GitHub Code → Download ZIP 是源码；普通用户使用编译后的 portable ZIP，或从 [Actions](https://github.com/KuGouOfficial/VolumeEdit/actions) 下载 VolumeEdit-portable-x64 产物。
 
-唯一的“开机启动”开关同时控制客户端登录启动和已安装辅助服务的自动启动。勾选后，以后开机启动服务不重复请求 UAC；取消后服务改为手动启动，打开客户端时可按需启动。服务更新和卸载仍需要管理员确认。启用辅助后就存在系统服务注册和受保护文件部署，普通模式继续保持解压即用。
-
-双击同目录 uninstall.exe，先恢复会话音量，再按管理员提示停止并删除本部署的服务和受保护文件，最后清理普通产品文件及状态。取消确认或清理失败时保留文件和记录以便重试。不要直接删除服务目录或 state。
-
-当前已实测 UAC 注册、Program Files 受保护部署、LocalSystem 服务运行、普通权限客户端的身份查询，以及不再次弹出 UAC 的自动/手动启动方式切换。**英雄联盟客户端的实际调音、重启后启动和服务卸载仍待实机验证**。本地试验输出在 out/service-trial/，用于保留正在运行的旧版；普通构建仍默认直接输出到 out/。
-
-## 能做什么
-
-本版本使用 Windows 应用会话音量接口，按原会话音量乘以 10^(dB/20) 调节，并将结果限制在 0～100%。例如 −20 dB 将会话的标量音量乘以 0.1。不会改变 Windows 主音量，也不会新增静音开关或 dB 预设。
-
-这不是最终混音后增益。正 dB 只能提高原本未达上限的会话音量，例如原会话标量 0.1 在 +20 dB 时达到 1.0；原会话已为 1.0 时，+40 dB 也不会进一步放大音频。会话标量上限来自 [Windows 会话音量接口](https://learn.microsoft.com/en-us/windows/win32/api/audioclient/nf-audioclient-isimpleaudiovolume-setmastervolume)。ASIO、独占输出、受保护或无访问权限的会话可能不受影响；指定到其他设备的应用不会由当前选中设备的控制覆盖。检测新会话采用约 50 ms 轮询，新应用最初的声音可能在衰减生效前播放，因此不能保证每个音频采样或开机早期声音都被降低。
-
-应用会话音量可能由 Windows 记忆。程序每次修改之前先保存原音量，正常退出、复位和卸载时恢复；异常退出后可重新运行恢复。若你或应用后来改变会话音量，程序将新值作为基准，退出时保留这次更改。多实例恢复有歧义时会保留记录，避免猜测覆盖。
-
-## 环境与源代码
-
-发布包是 Windows x64 原生 GUI 程序，静态链接 C++ 运行库。无需安装 Visual Studio、WDK 或证书。已在 Windows 环境完成构建及 10 项自动检查；Windows 10/11、设备热插拔和真实耳机听感仍需实际使用验收。
-
-源代码沿用仓库的 [Apache-2.0 许可证](LICENSE)。设计见 [DESIGN.md](DESIGN.md)，构建方法见 [DEVELOPMENT.md](DEVELOPMENT.md)，验证记录见 [BUILD_STATUS.md](BUILD_STATUS.md)。公开仓库只包含当前免驱动实现，不提交运行配置、构建缓存或历史驱动产物。
-
-Windows build 工作流会编译、运行检查并上传 ZIP 构建产物，可在 [Actions](https://github.com/KuGouOfficial/VolumeEdit/actions) 中下载。GitHub 的 Code → Download ZIP 下载的是源码，需要开发工具构建；普通用户请使用编译后的 portable ZIP。
-
-## 构建结果中哪些可以运行
-
-版本固定在根目录 [Makefile](Makefile) 的 `VERSION = 0.1`。源码构建后，正式程序直接生成到 `out/`，无需再到版本子目录查找。以下命令仅供开发者；普通用户仍然解压 ZIP、双击 EXE。
-
-| 文件或目录 | 用途 | 普通用户是否需要 |
-| --- | --- | --- |
-| `out/VolumeEdit.exe` | **最终程序**：音量客户端和托盘 | 需要，双击运行 |
-| `out/uninstall.exe` | **最终程序**：图形卸载工具 | 需要，卸载时双击 |
-| `out/VolumeEditBroker.exe` | **辅助服务程序**：由客户端请求管理员确认后部署 | 请保留，通过客户端启用，不直接双击 |
-| `out/product.id` | 部署标识，必须与三个 EXE 放在一起 | 需要保留 |
-| `out/VolumeEdit-portable-v0.1-x64.zip` | **最终发布包**，执行打包后生成；完整解压即可使用 | 推荐下载这一项 |
-| `out/SHA256SUMS.txt` | ZIP 内各产品文件的 SHA-256 校验清单 | 可用于校验 |
-| `out/VolumeEdit-portable-v0.1-x64.zip.sha256` | ZIP 文件本身的 SHA-256 校验值 | 可用于校验 |
-| `out/README.md`、`out/DESIGN.md`、`out/LICENSE` | 使用说明、设计文档和许可证 | 文档，不是程序 |
-| `out/BUILD_STATUS.md` | 随包提供的人工维护验证记录及待验收项 | 报告，不是程序 |
-| `out/reports/test-results.xml`、`test-results.log` | 最近一次自动测试的 JUnit 报告和日志 | 开发报告，不随发布 ZIP 提供 |
-| `out/reports/client-preview.png`、`uninstall-preview.png` | GUI 检查生成的界面预览 | 开发报告，不随发布 ZIP 提供 |
-| `build/*_tests.exe`、`build/Testing/`、其他 `build/` 内容 | 测试程序、CTest 缓存、编译中间文件 | 不需要，不随发布 ZIP 提供 |
-
-`build` 目标只编译；`test` 目标编译并生成报告；`package` 目标编译、测试通过后生成 ZIP 和校验值。`build` 不更新旧测试报告，查看报告时应核对时间。详细命令见 [DEVELOPMENT.md](DEVELOPMENT.md)。
-
-GitHub Actions 的 `VolumeEdit-portable-x64` 产物包含最终 ZIP 及其校验值；`VolumeEdit-test-reports` 产物是开发测试报告。源码目录中的卸载工具仅清理本部署产品和运行配置，保留构建报告、ZIP、源代码及自建文件。
+技术依据：[总音量 dB 接口](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-setmastervolumelevel)、[设备范围及步进](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-getvolumerange)、[硬件及软件控制](https://learn.microsoft.com/en-us/windows/win32/coreaudio/endpointvolume-api)。硬件控制可作用于共享和独占输出；软件控制的独占输出可能绕过本接口，ASIO 行为依赖驱动。

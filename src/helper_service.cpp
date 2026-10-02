@@ -113,7 +113,9 @@ ve::helper::Metadata installer_context(const fs::path& root,DWORD pid,bool insta
     if(root.wstring().find_first_of(L"\r\n\"")!=std::wstring::npos)throw std::runtime_error("Unsupported deployment path");
     ve::Handle parent(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,pid));if(!parent)ve::win(FALSE);
     wchar_t image[32768];DWORD size=32768;ve::win(QueryFullProcessImageNameW(parent.get(),0,image,&size));
-    const auto expected=root/(installing?L"VolumeEdit.exe":L"uninstall.exe");if(_wcsicmp(image,expected.c_str())!=0)throw std::runtime_error("Installer caller does not match the deployment");
+    const auto expected=root/(installing?L"VolumeEdit.exe":L"uninstall.exe");
+    const bool cleanup_client=!installing&&_wcsicmp(image,(root/L"VolumeEdit.exe").c_str())==0;
+    if(_wcsicmp(image,expected.c_str())!=0&&!cleanup_client)throw std::runtime_error("Installer caller does not match the deployment");
     HANDLE value=nullptr;ve::win(OpenProcessToken(parent.get(),TOKEN_QUERY,&value));ve::Handle token(value);
     return {id,ve::helper::token_sid(token.get()),root.wstring()};
 }

@@ -15,6 +15,7 @@ bool same_volume(float left,float right) noexcept;
 bool record_matches(float current,const VolumeRecord& record) noexcept;
 VolumeRecord adjusted_volume(float current,int gain_db_x10,const VolumeRecord* record);
 void reconcile_records(VolumeRecords& records,const std::vector<VolumeKey>& active);
+VolumeRecords merge_legacy_records(const VolumeRecords& latest,const VolumeRecords& earlier);
 bool conflicting_alias(const VolumeRecords& records,const VolumeKey& key);
 void atomic_text(const std::filesystem::path& path,const std::string& text);
 }

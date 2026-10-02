@@ -68,7 +68,7 @@ bool unlink_executable(const fs::path& path){
 void remove_product_files(const fs::path& root,bool keep_uninstaller){
     verify_product(root);refuse_reparse(root/L"state");
     // Fixed allowlist: preserve source files and user-created files in the folder.
-    for(const auto* name:{L"settings.json",L"settings.json.tmp",L"volumes.txt",L"volumes.txt.tmp",L"instance.id",L"instance.id.tmp",L"startup.txt",L"startup.txt.tmp",L"helper.txt",L"helper.txt.tmp"}){
+    for(const auto* name:{L"settings.json",L"settings.json.tmp",L"volumes.txt",L"volumes.txt.tmp",L"endpoint-volumes.txt",L"endpoint-volumes.txt.tmp",L"instance.id",L"instance.id.tmp",L"startup.txt",L"startup.txt.tmp",L"helper.txt",L"helper.txt.tmp"}){
         const auto path=root/L"state"/name;refuse_reparse(path);fs::remove(path);
     }
     if(fs::exists(root/L"state")&&fs::is_empty(root/L"state"))fs::remove(root/L"state");

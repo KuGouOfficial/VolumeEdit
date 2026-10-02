@@ -13,9 +13,9 @@
 #include <fstream>
 
 namespace {
-enum {Gain=100,Target,Refresh,Startup,Zero,Numeric,Helper};
+enum {Gain=100,Target,Refresh,Startup,Zero,Numeric,Legacy};
 constexpr UINT TrayMessage=WM_APP+1;
-HWND window,slider,label,numeric,target,status_line,summary,helper_line;
+HWND window,slider,label,numeric,target,status_line,summary;
 HFONT font{};HINSTANCE instance;UINT dpi=96;
 std::vector<ve::Device> list;
 std::unique_ptr<ve::AudioEngine> engine;
@@ -52,21 +52,19 @@ void numeric_apply(){
     SendMessageW(slider,TBM_SETPOS,TRUE,static_cast<int>(std::lround(value*10))+400);gain_label();apply();
 }
 LRESULT CALLBACK numeric_proc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){if(msg==WM_KEYDOWN&&w==VK_RETURN){numeric_apply();return 0;}return DefSubclassProc(h,msg,w,l);}
-void tray(bool add){if(preview)return;NOTIFYICONDATAW n{sizeof(n)};n.hWnd=window;n.uID=1;n.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;n.uCallbackMessage=TrayMessage;n.hIcon=ve::product_icon(instance,dpi,true);wcscpy_s(n.szTip,L"VolumeEdit 会话音量微调");Shell_NotifyIconW(add?NIM_ADD:NIM_DELETE,&n);}
+void tray(bool add){if(preview)return;NOTIFYICONDATAW n{sizeof(n)};n.hWnd=window;n.uID=1;n.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;n.uCallbackMessage=TrayMessage;n.hIcon=ve::product_icon(instance,dpi,true);wcscpy_s(n.szTip,L"VolumeEdit 总音量微调");Shell_NotifyIconW(add?NIM_ADD:NIM_DELETE,&n);}
 void show(){ShowWindow(window,SW_SHOW);SetForegroundWindow(window);}
 void status(){
     if(!engine)return;const auto s=engine->status();std::wstring text;
-    switch(s.state){case ve::AudioState::Running:text=L"音量控制已启用";break;case ve::AudioState::Waiting:text=L"等待输出设备或有效配置";break;case ve::AudioState::Error:text=L"音量调节未完成";break;default:text=L"正在启动";}
+    switch(s.state){case ve::AudioState::Running:text=L"总音量控制已启用";break;case ve::AudioState::Waiting:text=L"等待输出设备或有效配置";break;case ve::AudioState::Error:text=L"总音量调节未完成";break;default:text=L"正在启动";}
     if(FAILED(s.error))text+=L"\n"+ve::error_text(static_cast<DWORD>(s.error));
-    if(s.capped_sessions)text+=L"\n"+std::to_wstring(s.capped_sessions)+L" 个会话已达到 100% 上限，无法继续提高。";
-    if(s.unverified_sessions)text+=L"\n"+std::to_wstring(s.unverified_sessions)+L" 个会话无法确认归属，尚未调节。";
+    if(s.limited)text+=L"\n已达到设备音量范围，无法继续按设定偏移。";
+    if(s.external_change)text+=L"\n系统音量的手动更改已作为新的 0 dB 基准。";
+    if(s.pending_restore)text+=L"\n旧版待恢复："+std::to_wstring(s.pending_restore)+L" 个会话；应用重新发声后自动重试。";
     if(!s.saved)text+=L"\n配置未保存；请确认解压目录可写。";
     SetWindowTextW(status_line,text.c_str());
-    text=L"可访问会话："+std::to_wstring(s.sessions)+L"    原音量记录："+std::to_wstring(s.pending_restore);SetWindowTextW(summary,text.c_str());
-    try{const bool installed=ve::helper_installed();text=installed?L"权限辅助已注册":L"可选 · 首次启用需管理员确认";
-        if(s.assisted_sessions)text+=L" · 协助 "+std::to_wstring(s.assisted_sessions)+L" 个会话";
-        SetWindowTextW(helper_line,text.c_str());SetWindowTextW(GetDlgItem(window,Helper),installed?L"更新权限辅助":L"启用权限辅助");
-    }catch(...){SetWindowTextW(helper_line,L"权限辅助验证失败，请重试或卸载。");}
+    wchar_t values[200];swprintf_s(values,L"设备：%.1f dB    基准：%.1f dB\n范围：%.1f～%.1f dB    设备步进：%.1f dB",s.current_db,s.baseline_db,s.minimum_db,s.maximum_db,s.increment_db);SetWindowTextW(summary,values);
+    if(GetFocus()!=numeric&&GetFocus()!=slider){const auto settings=engine->settings();if(static_cast<int>(SendMessageW(slider,TBM_GETPOS,0,0))!=settings.gain_db_x10+400){SendMessageW(slider,TBM_SETPOS,TRUE,settings.gain_db_x10+400);gain_label();}}
 }
 LRESULT CALLBACK procedure(HWND h,UINT message,WPARAM wp,LPARAM lp){
     if(message==WM_CREATE){
@@ -74,7 +72,7 @@ LRESULT CALLBACK procedure(HWND h,UINT message,WPARAM wp,LPARAM lp){
         control(L"STATIC",(std::wstring(L"VolumeEdit ")+ve::DisplayVersion+L"  ·  耳机音量微调").c_str(),0,22,18,550,30);
         control(L"STATIC",L"输出设备",0,22,65,530,22);
         target=control(WC_COMBOBOXW,L"",Target,22,93,550,180,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);
-        control(L"STATIC",L"会话音量调节（−40～+40 dB）",0,22,137,530,22);
+        control(L"STATIC",L"总音量偏移（−40～+40 dB）",0,22,137,530,22);
         label=control(L"STATIC",L"",0,22,172,350,30);
         numeric=control(L"EDIT",L"0.0",Numeric,440,170,130,28,ES_AUTOHSCROLL|WS_BORDER|WS_TABSTOP);SetWindowSubclass(numeric,numeric_proc,1,0);
         slider=control(TRACKBAR_CLASSW,L"",Gain,16,212,560,42,TBS_AUTOTICKS|WS_TABSTOP);
@@ -83,11 +81,10 @@ LRESULT CALLBACK procedure(HWND h,UINT message,WPARAM wp,LPARAM lp){
         control(L"BUTTON",L"音量复位",Zero,22,299,175,36,BS_OWNERDRAW|WS_TABSTOP);
         control(L"BUTTON",L"刷新设备",Refresh,214,299,155,36,WS_TABSTOP);
         control(L"BUTTON",L"开机启动",Startup,390,299,180,36,BS_AUTOCHECKBOX|WS_TABSTOP);
-        control(L"BUTTON",L"启用权限辅助",Helper,22,343,210,32,WS_TABSTOP);
-        helper_line=control(L"STATIC",L"可选 · 首次启用需管理员确认",0,245,349,325,26);
-        status_line=control(L"STATIC",L"正在启动…",0,22,385,550,70);
-        summary=control(L"STATIC",L"",0,22,462,550,24);
-        control(L"STATIC",L"正 dB 仅提高会话音量，最高 100%；退出恢复原音量。",0,22,505,550,24);
+        status_line=control(L"STATIC",L"正在启动…",0,22,350,550,95);
+        summary=control(L"STATIC",L"",0,22,455,550,52);
+        control(L"STATIC",L"直接调整 Windows 总音量；0 dB 为启用时基准。",0,22,520,550,24);
+        if(!preview&&std::filesystem::exists(ve::state_directory()/L"helper.txt"))control(L"BUTTON",L"清理旧版辅助服务",Legacy,22,555,220,32,WS_TABSTOP);
         gain_label();refresh();tray(true);return 0;
     }
     if(message==WM_HSCROLL){gain_label();SetTimer(window,1,100,nullptr);return 0;}
@@ -100,9 +97,9 @@ LRESULT CALLBACK procedure(HWND h,UINT message,WPARAM wp,LPARAM lp){
         case Refresh:refresh();break;
         case Startup:if(!preview)try{
             const bool old=ve::startup_enabled(),enabled=SendMessageW(GetDlgItem(h,Startup),BM_GETCHECK,0,0)==BST_CHECKED;
-            ve::set_startup(enabled);try{ve::helper_startup(enabled);}catch(...){try{ve::set_startup(old);ve::helper_startup(old);}catch(...){}throw;}
+            (void)old;ve::set_startup(enabled);
         }catch(const std::exception& e){report(e);try{SendMessageW(GetDlgItem(h,Startup),BM_SETCHECK,ve::startup_enabled()?BST_CHECKED:BST_UNCHECKED,0);}catch(...){}}break;
-        case Helper:if(!preview){EnableWindow(GetDlgItem(h,Helper),FALSE);try{ve::install_helper(h);if(engine)engine->retry();}catch(const std::exception& e){report(e);}EnableWindow(GetDlgItem(h,Helper),TRUE);status();}break;
+        case Legacy:if(!preview)try{ve::remove_helper(h);ShowWindow(GetDlgItem(h,Legacy),SW_HIDE);}catch(const std::exception& e){report(e);}break;
         case 4001:show();break;
         case 4003:DestroyWindow(window);break;
         }return 0;
@@ -125,7 +122,7 @@ LRESULT CALLBACK procedure(HWND h,UINT message,WPARAM wp,LPARAM lp){
     }
     if(message==WM_DESTROY){
         KillTimer(window,1);KillTimer(window,2);KillTimer(window,3);
-        if(engine){engine->stop();const auto s=engine->status();if(s.pending_restore||FAILED(s.error))MessageBoxW(h,L"部分会话原音量尚未恢复。已保留 state 中的记录；请重新连接输出设备并打开相关应用，再运行 VolumeEdit 或 uninstall.exe 重试。",L"VolumeEdit 恢复未完成",MB_OK|MB_ICONWARNING);engine.reset();}
+        if(engine){engine->stop();engine.reset();}
         tray(false);DeleteObject(font);PostQuitMessage(0);return 0;
     }
     if(message==RegisterWindowMessageW(L"TaskbarCreated")){tray(true);return 0;}
@@ -138,7 +135,7 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
     if(count>2&&!(count==3&&argument==L"--ownership-probe"))return 1;args=argument.data();
     try{
         ve::Apartment apartment;instance=app;preview=wcscmp(args,L"--smoke")==0||wcscmp(args,L"--snapshot")==0;
-        if(argument==L"--setup-helper-only"){ve::ensure_state();ve::install_helper(nullptr);return 0;}
+        if(argument==L"--remove-helper-only"){ve::remove_helper(nullptr);return 0;}
         if(argument==L"--ownership-probe"){
             wchar_t* end=nullptr;const auto pid=std::wcstoul(operand.c_str(),&end,10);if(!pid||*end)return 2;
             const auto direct=ve::process_ownership(pid,false),assisted=ve::process_ownership(pid,true);
@@ -150,7 +147,7 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
         ve::Handle singleton;if(!preview){singleton.reset(CreateMutexW(nullptr,FALSE,L"Local\\VolumeEdit.Portable.v3"));if(!singleton)ve::win(FALSE);if(GetLastError()==ERROR_ALREADY_EXISTS){auto other=FindWindowW(L"VolumeEdit.Main",nullptr);if(other){ShowWindow(other,SW_SHOW);SetForegroundWindow(other);}return 0;}ve::ensure_state();}
         INITCOMMONCONTROLSEX common{sizeof(common),ICC_BAR_CLASSES};InitCommonControlsEx(&common);
         WNDCLASSW klass{};klass.hInstance=instance;klass.lpszClassName=L"VolumeEdit.Main";klass.lpfnWndProc=procedure;klass.hCursor=LoadCursorW(nullptr,IDC_ARROW);klass.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);klass.hIcon=ve::product_icon(instance,GetDpiForSystem(),false);RegisterClassW(&klass);
-        const auto system_dpi=GetDpiForSystem();auto h=CreateWindowExW(0,klass.lpszClassName,L"VolumeEdit",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,MulDiv(615,system_dpi,96),MulDiv(585,system_dpi,96),nullptr,nullptr,instance,nullptr);if(!h)return 1;SetWindowTextW(h,(std::wstring(L"VolumeEdit ")+ve::DisplayVersion).c_str());
+        const auto system_dpi=GetDpiForSystem();const bool legacy_helper=!preview&&std::filesystem::exists(ve::state_directory()/L"helper.txt");auto h=CreateWindowExW(0,klass.lpszClassName,L"VolumeEdit",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,MulDiv(615,system_dpi,96),MulDiv(legacy_helper?650:610,system_dpi,96),nullptr,nullptr,instance,nullptr);if(!h)return 1;SetWindowTextW(h,(std::wstring(L"VolumeEdit ")+ve::DisplayVersion).c_str());
         if(wcscmp(args,L"--smoke")==0){
             bool valid=ve::product_icon(instance,96,true)!=nullptr&&ve::product_icon(instance,96,false)!=nullptr&&IsWindow(slider)&&SendMessageW(slider,TBM_GETPOS,0,0)==400&&SendMessageW(target,CB_GETCURSEL,0,0)==0&&SendMessageW(target,CB_GETLBTEXTLEN,0,0)>0;
             SetWindowTextW(numeric,L"40.0");numeric_apply();valid=valid&&SendMessageW(slider,TBM_GETPOS,0,0)==800;
@@ -160,10 +157,9 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,LPWSTR args,int){
             SendMessageW(h,WM_COMMAND,Zero,0);wchar_t value[32];GetWindowTextW(numeric,value,32);valid=valid&&SendMessageW(slider,TBM_GETPOS,0,0)==400&&wcscmp(value,L"0.0")==0;
             DestroyWindow(h);return valid?0:2;
         }
-        if(preview){SetWindowTextW(status_line,L"音量控制已启用（界面预览）\n默认 0 dB，点击“音量复位”返回基准。");SetWindowTextW(summary,L"可访问会话：0    原音量记录：0");ShowWindow(h,SW_SHOW);UpdateWindow(h);snapshot(h,ve::executable_directory()/L"reports"/L"client-preview.png");DestroyWindow(h);return 0;}
+        if(preview){SetWindowTextW(status_line,L"总音量控制已启用（界面预览）\n默认 0 dB，点击“音量复位”返回基准。");SetWindowTextW(summary,L"设备：−21.6 dB    基准：−21.6 dB\n范围：−45.0～0.0 dB    设备步进：1.0 dB");ShowWindow(h,SW_SHOW);UpdateWindow(h);snapshot(h,ve::executable_directory()/L"reports"/L"client-preview.png");DestroyWindow(h);return 0;}
         engine=std::make_unique<ve::AudioEngine>();const auto settings=engine->settings();SendMessageW(slider,TBM_SETPOS,TRUE,settings.gain_db_x10+400);gain_label();refresh();
         SendMessageW(GetDlgItem(h,Startup),BM_SETCHECK,ve::startup_enabled()?BST_CHECKED:BST_UNCHECKED,0);
-        try{ve::ensure_helper_running();}catch(const std::exception& e){report(e);}
         engine->start();SetTimer(h,2,500,nullptr);SetTimer(h,3,3000,nullptr);
         if(wcscmp(args,L"--tray")!=0)ShowWindow(h,SW_SHOW);MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){if(!IsDialogMessageW(h,&msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}return 0;
     }catch(const std::exception& e){report(e);if(IsWindow(window))DestroyWindow(window);return 1;}

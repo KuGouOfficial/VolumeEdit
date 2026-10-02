@@ -32,6 +32,21 @@ void reconcile_records(VolumeRecords& records,const std::vector<VolumeKey>& acti
         if(agree&&!aliases.empty()){for(const auto& k:aliases)records.erase(k);records[key]=value;}
     }
 }
+VolumeRecords merge_legacy_records(const VolumeRecords& latest,const VolumeRecords& earlier){
+    auto result=latest;
+    for(const auto&[key,old]:earlier){
+        if(result.contains(key)){
+            const auto& current=result.at(key);
+            if(!same_volume(current.original,old.original)||!same_volume(current.applied,old.applied)||!same_volume(current.pending_from,old.pending_from))throw std::runtime_error("Conflicting recovery records for the same instance");
+            continue;
+        }
+        auto selected=result.end();unsigned aliases=0;
+        for(auto it=result.begin();it!=result.end();++it)if(it->first.first==key.first&&stable(it->first)==stable(key)){++aliases;selected=it;}
+        const auto old_count=std::count_if(earlier.begin(),earlier.end(),[&](const auto& pair){return pair.first.first==key.first&&stable(pair.first)==stable(key);});
+        if(aliases==1&&old_count==1&&old.pending_from<0&&selected->second.pending_from<0&&same_volume(selected->second.original,old.applied))selected->second.original=old.original;
+        else result.emplace(key,old);
+    }return result;
+}
 void atomic_text(const std::filesystem::path& path,const std::string& text){
     const auto temporary=path.wstring()+L".tmp";
     refuse_reparse(path);refuse_reparse(temporary);

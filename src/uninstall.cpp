@@ -36,6 +36,7 @@ void perform(){
         ve::Handle singleton(CreateMutexW(nullptr,FALSE,L"Local\\VolumeEdit.Portable.v3"));if(!singleton)ve::win(FALSE);
         if(!cleanup_smoke)ve::ensure_helper_running();
         close_client();
+        if(ve::restore_endpoint_volumes()!=0)throw std::runtime_error("部分输出设备的总音量尚未恢复。请连接原设备后重试；程序和记录已保留。");
         if(ve::restore_saved_volumes()!=0)throw std::runtime_error("部分原音量尚未恢复。请连接原输出设备并重新打开相关应用，再点击卸载。恢复记录和程序文件已保留。");
         if(!cleanup_smoke)ve::remove_helper(window);
         ve::clear_startup();

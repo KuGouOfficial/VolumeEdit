@@ -26,5 +26,10 @@ int main(){
     capped.pending_from=-1;if(ve::adjusted_volume(1.0f,0,&capped).applied!=0.8f||!ve::same_volume(ve::adjusted_volume(1.0f,-200,&capped).applied,0.08f))return 16;
     if(ve::adjusted_volume(0,400,nullptr).applied!=0||!ve::same_volume(ve::adjusted_volume(1,-400,nullptr).applied,0.01f))return 17;
     for(const int gain:{-401,401})try{ve::adjusted_volume(0.5f,gain,nullptr);return 18;}catch(const std::exception&){}
+    ve::VolumeRecords recent,earlier;recent[b]={0.2f,0.02f};earlier[a]={1.0f,0.2f};const auto chain=ve::merge_legacy_records(recent,earlier);
+    if(chain.size()!=1||chain.at(b).original!=1.0f||!ve::same_volume(chain.at(b).applied,0.02f))return 19;
+    earlier[a]={1.0f,0.3f};if(ve::merge_legacy_records(recent,earlier).size()!=2)return 20;
+    earlier=recent;if(ve::merge_legacy_records(recent,earlier).size()!=1)return 21;
+    earlier[b].original=0.4f;try{ve::merge_legacy_records(recent,earlier);return 22;}catch(const std::exception&){}
     std::cout<<"Backup: Unicode keys, exact instance identity, invalid input, duplicate receipts, atomic storage passed.\n";
 }
